@@ -1,86 +1,59 @@
-import Cocoa
 import AVFoundation
+import VideoToolbox
+import Cocoa
 import SwiftUI
 
-class VideoPreviewManager: NSObject {
-    private var captureSession: AVCaptureSession?
-    private var previewLayer: AVCaptureVideoPreviewLayer?
-    private var videoDeviceInput: AVCaptureDeviceInput?
-    private var audioDeviceInput: AVCaptureDeviceInput?
+class VideoPreviewManager: NSObject, ObservableObject {
+    @Published private(set) var captureSession = AVCaptureSession()
+    private let videoOutput = AVCaptureVideoDataOutput()
+    private let audioOutput = AVCaptureAudioDataOutput()
+    private let encoder = VideoEncoder()
+    private let audioEncoder = AudioEncoder()
+    @Published var isSessionRunning = false
+    
+    // Audio monitoring properties
+    private var audioMonitoringEnabled = false
+    private var audioMonitoringVolume: Float = 1.0
     private var audioPreviewOutput: AVCaptureAudioPreviewOutput?
-    private var hostView: NSView?
-    
-    deinit {
-        stopCaptureSession()
-    }
-    
-    func setupCaptureSession(in view: NSView) {
-        // Store reference to the host view
-        self.hostView = view
-        
-        // Initialize capture session
-        captureSession = AVCaptureSession()
-        captureSession?.sessionPreset = .high
-        
-        // Create preview layer
-        previewLayer = AVCaptureVideoPreviewLayer(session: captureSession!)
-        previewLayer?.videoGravity = .resizeAspect
-        
-        // Configure view to display the preview layer
-        view.wantsLayer = true
-        if view.layer == nil {
-            view.layer = CALayer()
-        }
-        
-        // Remove any existing layers and add our preview layer
-        if let existingLayers = view.layer?.sublayers {
-            for layer in existingLayers {
-                layer.removeFromSuperlayer()
-            }
-        }
-        
-        if let previewLayer = previewLayer {
-            previewLayer.frame = view.bounds
-            view.layer?.addSublayer(previewLayer)
-            
-            // Set autoresizing to maintain size with parent view
-            previewLayer.autoresizingMask = [.layerWidthSizable, .layerHeightSizable]
-        }
-        
-        // Set up resize notification
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(viewDidResize(_:)),
-            name: NSView.frameDidChangeNotification,
-            object: view
-        )
-        
-        // Set up audio preview output for monitoring
-        setupAudioPreviewOutput()
-        
-        // Start the session
-        startCaptureSession()
-        
-        print("Capture session and preview layer setup completed")
-    }
-    
-    @objc private func viewDidResize(_ notification: Notification) {
-        if let view = notification.object as? NSView {
-            updatePreviewLayerFrame(view.bounds)
-            print("View resized: \(view.bounds.size)")
+
+    @Published var selectedVideoDevice: String = "" {
+        didSet {
+            print("📹 PreviewManager: Video device changed to: \(selectedVideoDevice)")
+            updateCaptureSession()
         }
     }
     
-    func updatePreviewLayerFrame(_ bounds: CGRect) {
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        previewLayer?.frame = bounds
-        CATransaction.commit()
+    @Published var selectedAudioDevice: String = "" {
+        didSet {
+            print("🔊 PreviewManager: Audio device changed to: \(selectedAudioDevice)")
+            updateCaptureSession()
+        }
     }
+    
+    // MARK: - Public methods for audio monitoring
+    
+    func setAudioMonitoring(enabled: Bool) {
+        print("🔊 PreviewManager: Setting audio monitoring to \(enabled)")
+        audioMonitoringEnabled = enabled
+        
+        if let audioPreviewOutput = audioPreviewOutput {
+            audioPreviewOutput.volume = enabled ? audioMonitoringVolume : 0.0
+            print("🔊 PreviewManager: Audio monitoring \(enabled ? "enabled" : "disabled") with volume \(audioMonitoringVolume)")
+        }
+    }
+    
+    func setAudioMonitoringVolume(_ volume: Double) {
+        audioMonitoringVolume = Float(volume)
+        
+        if audioMonitoringEnabled, let audioPreviewOutput = audioPreviewOutput {
+            audioPreviewOutput.volume = audioMonitoringVolume
+            print("🔊 PreviewManager: Set audio monitoring volume to \(volume)")
+        }
+    }
+    
+    // MARK: - Private audio monitoring methods
     
     private func setupAudioPreviewOutput() {
-        guard let captureSession = captureSession else { return }
-        
         // Remove any existing audio preview output
         captureSession.outputs.forEach { output in
             if output is AVCaptureAudioPreviewOutput {
@@ -92,268 +65,170 @@ class VideoPreviewManager: NSObject {
         audioPreviewOutput = AVCaptureAudioPreviewOutput()
         if let audioPreviewOutput = audioPreviewOutput, captureSession.canAddOutput(audioPreviewOutput) {
             captureSession.addOutput(audioPreviewOutput)
-            // Initially disable monitoring
-            audioPreviewOutput.volume = 0.0
-            print("Added audio preview output for monitoring")
+            // Set initial volume based on monitoring state
+            audioPreviewOutput.volume = audioMonitoringEnabled ? audioMonitoringVolume : 0.0
+            print("✅ PreviewManager: Added audio preview output for monitoring")
+        } else {
+            print("❌ PreviewManager: Failed to add audio preview output")
         }
     }
-    
-    func setAudioMonitoring(enabled: Bool, volume: Float = 1.0) {
-        if let audioPreviewOutput = audioPreviewOutput {
-            audioPreviewOutput.volume = enabled ? volume : 0.0
-            print("Audio monitoring \(enabled ? "enabled" : "disabled") with volume \(volume)")
-        }
-    }
-    
-    func setVideoDevice(_ device: AVCaptureDevice) {
-        guard let captureSession = captureSession else { return }
+
+    func updateCaptureSession() {
+        print("🔄 PreviewManager: Updating capture session...")
         
-        // If it's the same device, don't reconfigure
-        if let currentInput = videoDeviceInput, currentInput.device == device {
+        // Use discovery session instead of deprecated devices() method
+        let videoDiscoverySession = AVCaptureDevice.DiscoverySession(
+            deviceTypes: [.builtInWideAngleCamera, .externalUnknown, .deskViewCamera, .continuityCamera],
+            mediaType: .video,
+            position: .unspecified
+        )
+        
+        let audioDiscoverySession = AVCaptureDevice.DiscoverySession(
+            deviceTypes: [.builtInMicrophone, .externalUnknown],
+            mediaType: .audio,
+            position: .unspecified
+        )
+        
+        // Find selected video device
+        let videoDevice = videoDiscoverySession.devices.first(where: { $0.uniqueID == selectedVideoDevice })
+        
+        // Find selected audio device
+        let audioDevice = audioDiscoverySession.devices.first(where: { $0.uniqueID == selectedAudioDevice })
+        
+        if videoDevice == nil && audioDevice == nil {
+            print("⚠️ PreviewManager: No video or audio device selected")
             return
         }
         
-        captureSession.beginConfiguration()
-        
-        // Remove existing input if any
-        if let currentInput = videoDeviceInput {
-            captureSession.removeInput(currentInput)
-            self.videoDeviceInput = nil
+        if let videoDevice = videoDevice {
+            print("✅ PreviewManager: Updating with video device: \(videoDevice.localizedName)")
         }
         
-        // Add new input
-        do {
-            let newVideoInput = try AVCaptureDeviceInput(device: device)
-            
-            if captureSession.canAddInput(newVideoInput) {
-                captureSession.addInput(newVideoInput)
-                self.videoDeviceInput = newVideoInput
-                print("Successfully set video device: \(device.localizedName)")
-                
-                // Add video output if needed
-                setupVideoOutput()
+        if let audioDevice = audioDevice {
+            print("✅ PreviewManager: Updating with audio device: \(audioDevice.localizedName)")
+        }
+        
+        // Create a new session to avoid conflicts
+        let newSession = AVCaptureSession()
+        newSession.beginConfiguration()
+
+        // Add video input if available
+        if let videoDevice = videoDevice {
+            if let videoInput = try? AVCaptureDeviceInput(device: videoDevice) {
+                if newSession.canAddInput(videoInput) {
+                    newSession.addInput(videoInput)
+                    print("✅ PreviewManager: Added video input for device: \(videoDevice.localizedName)")
+                } else {
+                    print("❌ PreviewManager: Session cannot add video input for device: \(videoDevice.localizedName)")
+                }
             } else {
-                print("Cannot add video input for device: \(device.localizedName)")
-            }
-        } catch {
-            print("Error setting up video device: \(error)")
-        }
-        
-        captureSession.commitConfiguration()
-    }
-    
-    private func setupVideoOutput() {
-        guard let captureSession = captureSession else { return }
-        
-        // Only add video output if it's not already present
-        if !captureSession.outputs.contains(where: { $0 is AVCaptureVideoDataOutput }) {
-            let videoOutput = AVCaptureVideoDataOutput()
-            if captureSession.canAddOutput(videoOutput) {
-                captureSession.addOutput(videoOutput)
-                print("Added video output to capture session")
+                print("❌ PreviewManager: Failed to create video input for device: \(videoDevice.localizedName)")
             }
         }
-    }
-    
-    func setAudioDevice(_ device: AVCaptureDevice) {
-        guard let captureSession = captureSession else { return }
         
-        // If it's the same device, don't reconfigure
-        if let currentInput = audioDeviceInput, currentInput.device == device {
-            return
-        }
-        
-        captureSession.beginConfiguration()
-        
-        // Remove existing input if any
-        if let currentInput = audioDeviceInput {
-            captureSession.removeInput(currentInput)
-            self.audioDeviceInput = nil
-        }
-        
-        // Add new input
-        do {
-            let newAudioInput = try AVCaptureDeviceInput(device: device)
-            
-            if captureSession.canAddInput(newAudioInput) {
-                captureSession.addInput(newAudioInput)
-                self.audioDeviceInput = newAudioInput
-                print("Successfully set audio device: \(device.localizedName)")
-                
-                // Ensure audio preview output is set up
-                setupAudioPreviewOutput()
+        // Add audio input if available
+        if let audioDevice = audioDevice {
+            if let audioInput = try? AVCaptureDeviceInput(device: audioDevice) {
+                if newSession.canAddInput(audioInput) {
+                    newSession.addInput(audioInput)
+                    print("✅ PreviewManager: Added audio input for device: \(audioDevice.localizedName)")
+                } else {
+                    print("❌ PreviewManager: Session cannot add audio input for device: \(audioDevice.localizedName)")
+                }
             } else {
-                print("Cannot add audio input for device: \(device.localizedName)")
+                print("❌ PreviewManager: Failed to create audio input for device: \(audioDevice.localizedName)")
             }
-        } catch {
-            print("Error setting up audio device: \(error)")
+        }
+
+        // Add video output
+        if newSession.canAddOutput(videoOutput) {
+            newSession.addOutput(videoOutput)
+            print("✅ PreviewManager: Added video output to session")
         }
         
+        // Add audio output
+        if newSession.canAddOutput(audioOutput) {
+            newSession.addOutput(audioOutput)
+            print("✅ PreviewManager: Added audio output to session")
+        }
+        
+        // Add audio preview output for monitoring
+        newSession.commitConfiguration()
+        
+        // Stop current session
+        if captureSession.isRunning {
+            captureSession.stopRunning()
+            print("🛑 PreviewManager: Stopped previous session")
+        }
+        
+        // Update session reference and start
+        captureSession = newSession
+        
+        // Setup audio preview output after session is created but before starting
+        setupAudioPreviewOutput()
+        
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            self?.captureSession.startRunning()
+            DispatchQueue.main.async {
+                self?.isSessionRunning = self?.captureSession.isRunning ?? false
+                print("▶️ PreviewManager: Started new session, running: \(self?.captureSession.isRunning ?? false)")
+            }
+        }
+        
+        // Notify listeners about the new session
+        DispatchQueue.main.async {
+            print("📣 PreviewManager: Broadcasting session update notification")
+            NotificationCenter.default.post(name: .captureSessionUpdated, object: newSession)
+        }
+    }
+
+    override init() {
+        super.init()
+        print("🚀 PreviewManager: Initializing")
+        
+        // Configure outputs
+        videoOutput.setSampleBufferDelegate(self, queue: DispatchQueue(label: "video.queue"))
+        audioOutput.setSampleBufferDelegate(self, queue: DispatchQueue(label: "audio.queue"))
+        
+        // Find default devices
+        let videoDevice = AVCaptureDevice.default(for: .video)
+        let audioDevice = AVCaptureDevice.default(for: .audio)
+        
+        // Start with empty session
+        captureSession.beginConfiguration()
         captureSession.commitConfiguration()
-    }
-    
-    func startCaptureSession() {
-        if captureSession?.isRunning == false {
-            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-                self?.captureSession?.startRunning()
-                print("Capture session started")
-            }
-        }
-    }
-    
-    func stopCaptureSession() {
-        if captureSession?.isRunning == true {
-            captureSession?.stopRunning()
-            print("Capture session stopped")
+        
+        // Set device IDs
+        if let videoDevice = videoDevice {
+            print("✅ PreviewManager: Found default video device: \(videoDevice.localizedName)")
+            selectedVideoDevice = videoDevice.uniqueID
+        } else {
+            print("⚠️ PreviewManager: No default video device available")
         }
         
-        // Remove resize notification observer
-        if let hostView = hostView {
-            NotificationCenter.default.removeObserver(
-                self,
-                name: NSView.frameDidChangeNotification,
-                object: hostView
-            )
+        if let audioDevice = audioDevice {
+            print("✅ PreviewManager: Found default audio device: \(audioDevice.localizedName)")
+            selectedAudioDevice = audioDevice.uniqueID
+        } else {
+            print("⚠️ PreviewManager: No default audio device available")
+        }
+    }
+    
+    deinit {
+        if captureSession.isRunning {
+            captureSession.stopRunning()
         }
     }
 }
 
-// SwiftUI wrapper for the NSView that contains the AVCaptureVideoPreviewLayer
-struct VideoPreviewRepresentable: NSViewRepresentable {
-    @ObservedObject var videoManager: VideoManager
-    
-    // Use a coordinator to maintain the VideoPreviewManager's lifecycle
-    class Coordinator: NSObject {
-        var parent: VideoPreviewRepresentable
-        var previewManager: VideoPreviewManager
-        
-        init(parent: VideoPreviewRepresentable) {
-            self.parent = parent
-            self.previewManager = VideoPreviewManager()
-        }
-    }
-    
-    func makeCoordinator() -> Coordinator {
-        Coordinator(parent: self)
-    }
-    
-    func makeNSView(context: Context) -> NSView {
-        // Create a view that will automatically resize with its superview
-        let view = ResizableNSView(frame: .zero)
-        view.autoresizingMask = [.width, .height]
-        view.translatesAutoresizingMaskIntoConstraints = true
-        
-        let coordinator = context.coordinator
-        
-        // Setup capture session
-        coordinator.previewManager.setupCaptureSession(in: view)
-        
-        // Check authorization status and request permissions if needed
-        checkAndRequestCameraPermission()
-        
-        // Initialize with selected devices
-        if let device = videoManager.currentVideoDevice {
-            print("Setting up initial video device: \(device.localizedName)")
-            coordinator.previewManager.setVideoDevice(device)
-        }
-        
-        if let device = videoManager.currentAudioDevice {
-            coordinator.previewManager.setAudioDevice(device)
-        }
-        
-        // Set initial audio monitoring state
-        coordinator.previewManager.setAudioMonitoring(
-            enabled: videoManager.isAudioMonitoringEnabled, 
-            volume: Float(videoManager.audioMonitoringVolume)
-        )
-        
-        return view
-    }
-    
-    func updateNSView(_ nsView: NSView, context: Context) {
-        let coordinator = context.coordinator
-        
-        // Update the preview layer frame when the view size changes
-        if nsView.frame.size != .zero {
-            coordinator.previewManager.updatePreviewLayerFrame(nsView.bounds)
-        }
-        
-        // Update video device if needed
-        if let device = videoManager.currentVideoDevice {
-            coordinator.previewManager.setVideoDevice(device)
-        }
-        
-        // Update audio device if needed
-        if let device = videoManager.currentAudioDevice {
-            coordinator.previewManager.setAudioDevice(device)
-        }
-        
-        // Update audio monitoring
-        coordinator.previewManager.setAudioMonitoring(
-            enabled: videoManager.isAudioMonitoringEnabled,
-            volume: Float(videoManager.audioMonitoringVolume)
-        )
-    }
-    
-    static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
-        // Clean up resources
-        coordinator.previewManager.stopCaptureSession()
-    }
-    
-    private func checkAndRequestCameraPermission() {
-        switch AVCaptureDevice.authorizationStatus(for: .video) {
-        case .authorized:
-            // Already authorized
-            break
-        case .notDetermined:
-            // Request permission
-            AVCaptureDevice.requestAccess(for: .video) { granted in
-                if granted {
-                    // Permission granted, refresh devices
-                    DispatchQueue.main.async {
-                        self.videoManager.refreshDevices()
-                    }
-                }
-            }
-        case .denied, .restricted:
-            // Alert user to change permissions
-            print("Camera permissions denied or restricted")
-        @unknown default:
-            break
-        }
-        
-        // Also check microphone permissions
-        switch AVCaptureDevice.authorizationStatus(for: .audio) {
-        case .authorized:
-            // Already authorized
-            break
-        case .notDetermined:
-            // Request permission
-            AVCaptureDevice.requestAccess(for: .audio) { granted in
-                if granted {
-                    // Permission granted, refresh devices
-                    DispatchQueue.main.async {
-                        self.videoManager.refreshDevices()
-                    }
-                }
-            }
-        case .denied, .restricted:
-            // Alert user to change permissions
-            print("Microphone permissions denied or restricted")
-        @unknown default:
-            break
+// MARK: - AVCaptureVideoDataOutputSampleBufferDelegate
+
+extension VideoPreviewManager: AVCaptureVideoDataOutputSampleBufferDelegate, AVCaptureAudioDataOutputSampleBufferDelegate {
+    func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
+        if output is AVCaptureVideoDataOutput {
+            encoder.encode(sampleBuffer: sampleBuffer)
+        } else if output is AVCaptureAudioDataOutput {
+            audioEncoder.encode(sampleBuffer: sampleBuffer)
         }
     }
 }
-
-// Custom NSView that properly handles resizing
-class ResizableNSView: NSView {
-    override func layout() {
-        super.layout()
-        // Notify when layout changes (including parent size changes)
-        NotificationCenter.default.post(
-            name: NSView.frameDidChangeNotification,
-            object: self
-        )
-    }
-} 
