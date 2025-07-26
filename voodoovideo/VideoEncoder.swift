@@ -36,6 +36,7 @@ class VideoEncoder {
             presentationTimeStamp: presentationTimeStamp,
             duration: .invalid,
             frameProperties: nil,
+            sourceFrameRefcon: nil,
             infoFlagsOut: nil
         )
     }
@@ -51,12 +52,13 @@ private func videoCompressedCallback(
     guard status == noErr, let sampleBuffer = sampleBuffer,
           let dataBuffer = CMSampleBufferGetDataBuffer(sampleBuffer) else { return }
 
-    var length: Int = 0
+    var lengthAtOffset: Int = 0
+    var totalLength: Int = 0
     var dataPointer: UnsafeMutablePointer<Int8>?
-    CMBlockBufferGetDataPointer(dataBuffer, atOffset: 0, lengthAtOffsetOut: &length, totalLengthOut: &length, dataPointerOut: &dataPointer)
+    CMBlockBufferGetDataPointer(dataBuffer, atOffset: 0, lengthAtOffsetOut: &lengthAtOffset, totalLengthOut: &totalLength, dataPointerOut: &dataPointer)
 
     if let dataPointer = dataPointer {
-        let data = Data(bytes: dataPointer, count: length)
+        let data = Data(bytes: dataPointer, count: totalLength)
         // 🔥 Send this `data` directly via SRT or WebRTC here
         print("Encoded Frame: \(data.count) bytes")
     }

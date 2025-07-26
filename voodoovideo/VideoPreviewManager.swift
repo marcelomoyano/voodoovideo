@@ -3,13 +3,29 @@ import VideoToolbox
 import Cocoa
 import SwiftUI
 
+extension NSNotification.Name {
+    static let captureSessionUpdated = NSNotification.Name("captureSessionUpdated")
+}
+
 class VideoPreviewManager: NSObject, ObservableObject {
     @Published private(set) var captureSession = AVCaptureSession()
     private let videoOutput = AVCaptureVideoDataOutput()
     private let audioOutput = AVCaptureAudioDataOutput()
-    private let encoder = VideoEncoder()
-    private let audioEncoder = AudioEncoder()
     @Published var isSessionRunning = false
+    
+    // Permissions
+    @Published var cameraPermissionStatus: AVAuthorizationStatus = .notDetermined
+    @Published var microphonePermissionStatus: AVAuthorizationStatus = .notDetermined
+    @Published var permissionsGranted = false
+    
+    // Recording components
+    private let localRecorder = LocalRecorder()
+    private let hlsSegmenter = HLSSegmenter()
+    private var hlsUploader: HLSUploader?
+    @Published var isRecording = false
+    @Published var recordingDuration: TimeInterval = 0
+    private var recordingTimer: Timer?
+    private var recordingStartTime: Date?
     
     // Audio monitoring properties
     private var audioMonitoringEnabled = false
@@ -19,7 +35,12 @@ class VideoPreviewManager: NSObject, ObservableObject {
     @Published var selectedVideoDevice: String = "" {
         didSet {
             print("📹 PreviewManager: Video device changed to: \(selectedVideoDevice)")
-            updateCaptureSession()
+            if !selectedVideoDevice.isEmpty && permissionsGranted {
+                print("📹 PreviewManager: Updating capture session for new device")
+                updateCaptureSession()
+            } else {
+                print("⚠️ PreviewManager: Not updating session - device empty or no permissions")
+            }
         }
     }
     
@@ -28,6 +49,15 @@ class VideoPreviewManager: NSObject, ObservableObject {
             print("🔊 PreviewManager: Audio device changed to: \(selectedAudioDevice)")
             updateCaptureSession()
         }
+    }
+    
+    var currentVideoDevice: AVCaptureDevice? {
+        let session = AVCaptureDevice.DiscoverySession(
+            deviceTypes: [.builtInWideAngleCamera, .external, .deskViewCamera, .continuityCamera],
+            mediaType: .video,
+            position: .unspecified
+        )
+        return session.devices.first(where: { $0.uniqueID == selectedVideoDevice })
     }
     
     // MARK: - Public methods for audio monitoring
@@ -78,13 +108,13 @@ class VideoPreviewManager: NSObject, ObservableObject {
         
         // Use discovery session instead of deprecated devices() method
         let videoDiscoverySession = AVCaptureDevice.DiscoverySession(
-            deviceTypes: [.builtInWideAngleCamera, .externalUnknown, .deskViewCamera, .continuityCamera],
+            deviceTypes: [.builtInWideAngleCamera, .external, .deskViewCamera, .continuityCamera],
             mediaType: .video,
             position: .unspecified
         )
         
         let audioDiscoverySession = AVCaptureDevice.DiscoverySession(
-            deviceTypes: [.builtInMicrophone, .externalUnknown],
+            deviceTypes: [.microphone, .external],
             mediaType: .audio,
             position: .unspecified
         )
@@ -95,6 +125,12 @@ class VideoPreviewManager: NSObject, ObservableObject {
         // Find selected audio device
         let audioDevice = audioDiscoverySession.devices.first(where: { $0.uniqueID == selectedAudioDevice })
         
+        print("🔍 PreviewManager: Looking for video device ID: '\(selectedVideoDevice)'")
+        print("🔍 PreviewManager: Available video devices:")
+        videoDiscoverySession.devices.forEach { device in
+            print("  - \(device.localizedName) (ID: '\(device.uniqueID)') Type: \(device.deviceType)")
+        }
+        
         if videoDevice == nil && audioDevice == nil {
             print("⚠️ PreviewManager: No video or audio device selected")
             return
@@ -102,6 +138,11 @@ class VideoPreviewManager: NSObject, ObservableObject {
         
         if let videoDevice = videoDevice {
             print("✅ PreviewManager: Updating with video device: \(videoDevice.localizedName)")
+            print("✅ PreviewManager: Device type: \(videoDevice.deviceType)")
+            print("✅ PreviewManager: Manufacturer: \(videoDevice.manufacturer)")
+            print("✅ PreviewManager: Model ID: \(videoDevice.modelID)")
+        } else if !selectedVideoDevice.isEmpty {
+            print("❌ PreviewManager: Could not find video device with ID: '\(selectedVideoDevice)'")
         }
         
         if let audioDevice = audioDevice {
@@ -111,18 +152,173 @@ class VideoPreviewManager: NSObject, ObservableObject {
         // Create a new session to avoid conflicts
         let newSession = AVCaptureSession()
         newSession.beginConfiguration()
+        
+        // Set a high-quality preset for capture cards
+        if newSession.canSetSessionPreset(.high) {
+            newSession.sessionPreset = .high
+            print("📹 PreviewManager: Set session preset to high quality")
+        } else if newSession.canSetSessionPreset(.medium) {
+            newSession.sessionPreset = .medium
+            print("📹 PreviewManager: Set session preset to medium quality")
+        }
 
         // Add video input if available
         if let videoDevice = videoDevice {
-            if let videoInput = try? AVCaptureDeviceInput(device: videoDevice) {
+            do {
+                let videoInput = try AVCaptureDeviceInput(device: videoDevice)
                 if newSession.canAddInput(videoInput) {
                     newSession.addInput(videoInput)
                     print("✅ PreviewManager: Added video input for device: \(videoDevice.localizedName)")
+                    
+                    // Try to configure the device for optimal capture card settings
+                    try videoDevice.lockForConfiguration()
+                    
+                    // Set the active format to a supported one if needed
+                    let formats = videoDevice.formats
+                    print("📹 PreviewManager: Device has \(formats.count) formats available")
+                    
+                    // Log all available formats for debugging
+                    formats.enumerated().forEach { index, format in
+                        let desc = format.formatDescription
+                        let dimensions = CMVideoFormatDescriptionGetDimensions(desc)
+                        let frameRateRanges = format.videoSupportedFrameRateRanges
+                        let frameRates = frameRateRanges.map { "\($0.minFrameRate)-\($0.maxFrameRate)fps" }.joined(separator: ", ")
+                        let pixelFormat = CMFormatDescriptionGetMediaSubType(desc)
+                        let pixelFormatString = String(format: "%c%c%c%c", 
+                                                     (pixelFormat >> 24) & 0xFF,
+                                                     (pixelFormat >> 16) & 0xFF, 
+                                                     (pixelFormat >> 8) & 0xFF,
+                                                     pixelFormat & 0xFF)
+                        print("  Format \(index): \(dimensions.width)x\(dimensions.height) @ \(frameRates) - \(pixelFormatString)")
+                    }
+                    
+                    // For Elgato and external capture cards, find the best format
+                    var preferredFormat: AVCaptureDevice.Format?
+                    
+                    if videoDevice.deviceType == .external {
+                        print("📹 PreviewManager: Configuring external capture device: \(videoDevice.localizedName)")
+                        
+                        // For Elgato 4K X, prefer NV12 format which is what it uses
+                        let preferredPixelFormats: [OSType] = [
+                            kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,  // NV12
+                            kCVPixelFormatType_422YpCbCr8,                     // YUY2
+                            kCVPixelFormatType_32BGRA                          // BGRA fallback
+                        ]
+                        
+                        // Priority order matching Elgato 4K X formats from OBS
+                        let preferredSpecs = [
+                            (1920, 1080, 60.0), (1920, 1080, 30.0), (1920, 1080, 59.94),
+                            (1280, 720, 60.0), (1280, 720, 59.94), (1280, 720, 30.0),
+                            (720, 480, 60.0), (720, 480, 59.94), (720, 480, 30.0),
+                            (640, 480, 60.0), (640, 480, 59.94), (640, 480, 30.0),
+                            (720, 576, 50.0)
+                        ]
+                        
+                        // Try each preferred spec with preferred pixel formats
+                        for (width, height, fps) in preferredSpecs {
+                            for pixelFormat in preferredPixelFormats {
+                                preferredFormat = formats.first { format in
+                                    let desc = format.formatDescription
+                                    let dimensions = CMVideoFormatDescriptionGetDimensions(desc)
+                                    let frameRateRanges = format.videoSupportedFrameRateRanges
+                                    let formatPixelFormat = CMFormatDescriptionGetMediaSubType(desc)
+                                    
+                                    let dimensionMatch = dimensions.width == width && dimensions.height == height
+                                    let pixelFormatMatch = formatPixelFormat == pixelFormat
+                                    let frameRateMatch = frameRateRanges.contains { abs($0.maxFrameRate - fps) < 0.1 || $0.maxFrameRate >= fps }
+                                    
+                                    return dimensionMatch && pixelFormatMatch && frameRateMatch
+                                }
+                                if preferredFormat != nil {
+                                    print("📹 PreviewManager: Found preferred format: \(width)x\(height) @ \(fps)fps")
+                                    break
+                                }
+                            }
+                            if preferredFormat != nil { break }
+                        }
+                        
+                        // If no exact match, try without pixel format restriction
+                        if preferredFormat == nil {
+                            print("📹 PreviewManager: No exact format match, trying without pixel format restriction")
+                            for (width, height, fps) in preferredSpecs {
+                                preferredFormat = formats.first { format in
+                                    let desc = format.formatDescription
+                                    let dimensions = CMVideoFormatDescriptionGetDimensions(desc)
+                                    let frameRateRanges = format.videoSupportedFrameRateRanges
+                                    
+                                    return dimensions.width == width &&
+                                           dimensions.height == height &&
+                                           frameRateRanges.contains { abs($0.maxFrameRate - fps) < 0.1 || $0.maxFrameRate >= fps }
+                                }
+                                if preferredFormat != nil { break }
+                            }
+                        }
+                        
+                        // Final fallback: any format with decent resolution and frame rate
+                        if preferredFormat == nil {
+                            print("📹 PreviewManager: Using fallback format selection")
+                            preferredFormat = formats.filter { format in
+                                let desc = format.formatDescription
+                                let dimensions = CMVideoFormatDescriptionGetDimensions(desc)
+                                let frameRateRanges = format.videoSupportedFrameRateRanges
+                                return dimensions.width >= 640 && 
+                                       dimensions.height >= 480 &&
+                                       frameRateRanges.contains { $0.maxFrameRate >= 30.0 }
+                            }.first
+                        }
+                    } else {
+                        // For built-in cameras, prefer 1080p or highest available
+                        preferredFormat = formats.first { format in
+                            let desc = format.formatDescription
+                            let dimensions = CMVideoFormatDescriptionGetDimensions(desc)
+                            return dimensions.width >= 1920 && dimensions.height >= 1080
+                        } ?? formats.last
+                    }
+                    
+                    if let format = preferredFormat {
+                        videoDevice.activeFormat = format
+                        let desc = format.formatDescription
+                        let dimensions = CMVideoFormatDescriptionGetDimensions(desc)
+                        let frameRateRanges = format.videoSupportedFrameRateRanges
+                        let maxFPS = frameRateRanges.map { $0.maxFrameRate }.max() ?? 0
+                        let pixelFormat = CMFormatDescriptionGetMediaSubType(desc)
+                        let pixelFormatString = String(format: "%c%c%c%c", 
+                                                     (pixelFormat >> 24) & 0xFF,
+                                                     (pixelFormat >> 16) & 0xFF, 
+                                                     (pixelFormat >> 8) & 0xFF,
+                                                     pixelFormat & 0xFF)
+                        print("📹 PreviewManager: Set active format to \(dimensions.width)x\(dimensions.height) @ \(maxFPS)fps - \(pixelFormatString)")
+                        
+                        // Set frame rate to maximum for capture cards
+                        if videoDevice.deviceType == .external && !frameRateRanges.isEmpty {
+                            // Find the best frame rate range (prefer 60fps or highest available)
+                            let bestRange = frameRateRanges.max { range1, range2 in
+                                // Prefer 60fps if available, otherwise highest
+                                let rate1 = abs(range1.maxFrameRate - 60.0) < 0.1 ? 1000 : range1.maxFrameRate
+                                let rate2 = abs(range2.maxFrameRate - 60.0) < 0.1 ? 1000 : range2.maxFrameRate
+                                return rate1 < rate2
+                            }
+                            
+                            if let range = bestRange {
+                                // Use the exact CMTime from the supported range
+                                videoDevice.activeVideoMinFrameDuration = range.minFrameDuration
+                                videoDevice.activeVideoMaxFrameDuration = range.maxFrameDuration
+                                print("📹 PreviewManager: Set frame rate to \(range.maxFrameRate)fps using exact range")
+                            } else {
+                                print("⚠️ PreviewManager: No valid frame rate range found")
+                            }
+                        }
+                    } else {
+                        print("❌ PreviewManager: No suitable format found for \(videoDevice.localizedName)")
+                    }
+                    
+                    videoDevice.unlockForConfiguration()
                 } else {
                     print("❌ PreviewManager: Session cannot add video input for device: \(videoDevice.localizedName)")
+                    print("❌ PreviewManager: Session preset: \(newSession.sessionPreset)")
                 }
-            } else {
-                print("❌ PreviewManager: Failed to create video input for device: \(videoDevice.localizedName)")
+            } catch {
+                print("❌ PreviewManager: Failed to create video input for device: \(videoDevice.localizedName) - Error: \(error)")
             }
         }
         
@@ -172,6 +368,9 @@ class VideoPreviewManager: NSObject, ObservableObject {
             DispatchQueue.main.async {
                 self?.isSessionRunning = self?.captureSession.isRunning ?? false
                 print("▶️ PreviewManager: Started new session, running: \(self?.captureSession.isRunning ?? false)")
+                
+                // Force UI update after session starts
+                self?.objectWillChange.send()
             }
         }
         
@@ -190,13 +389,23 @@ class VideoPreviewManager: NSObject, ObservableObject {
         videoOutput.setSampleBufferDelegate(self, queue: DispatchQueue(label: "video.queue"))
         audioOutput.setSampleBufferDelegate(self, queue: DispatchQueue(label: "audio.queue"))
         
-        // Find default devices
-        let videoDevice = AVCaptureDevice.default(for: .video)
-        let audioDevice = AVCaptureDevice.default(for: .audio)
-        
         // Start with empty session
         captureSession.beginConfiguration()
         captureSession.commitConfiguration()
+        
+        // Check permissions first
+        checkPermissions()
+        
+        // Only set up devices if permissions are already granted
+        if permissionsGranted {
+            setupDefaultDevices()
+        }
+    }
+    
+    private func setupDefaultDevices() {
+        // Find default devices
+        let videoDevice = AVCaptureDevice.default(for: .video)
+        let audioDevice = AVCaptureDevice.default(for: .audio)
         
         // Set device IDs
         if let videoDevice = videoDevice {
@@ -214,7 +423,230 @@ class VideoPreviewManager: NSObject, ObservableObject {
         }
     }
     
+    // MARK: - Permission Management
+    
+    func checkPermissions() {
+        cameraPermissionStatus = AVCaptureDevice.authorizationStatus(for: .video)
+        microphonePermissionStatus = AVCaptureDevice.authorizationStatus(for: .audio)
+        updatePermissionsStatus()
+        
+        print("📹 PreviewManager: Camera permission: \(cameraPermissionStatus.description)")
+        print("🎤 PreviewManager: Microphone permission: \(microphonePermissionStatus.description)")
+    }
+    
+    func requestCameraPermission() {
+        AVCaptureDevice.requestAccess(for: .video) { granted in
+            DispatchQueue.main.async { [weak self] in
+                self?.cameraPermissionStatus = AVCaptureDevice.authorizationStatus(for: .video)
+                self?.updatePermissionsStatus()
+                if granted {
+                    print("✅ PreviewManager: Camera permission granted")
+                    self?.setupDefaultDevices()
+                    self?.startPreviewIfReady()
+                } else {
+                    print("❌ PreviewManager: Camera permission denied")
+                }
+            }
+        }
+    }
+    
+    func requestMicrophonePermission() {
+        AVCaptureDevice.requestAccess(for: .audio) { [weak self] granted in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                self.microphonePermissionStatus = AVCaptureDevice.authorizationStatus(for: .audio)
+                self.updatePermissionsStatus()
+                if granted {
+                    print("✅ PreviewManager: Microphone permission granted")
+                    self.setupDefaultDevices()
+                } else {
+                    print("❌ PreviewManager: Microphone permission denied")
+                }
+            }
+        }
+    }
+    
+    private func updatePermissionsStatus() {
+        permissionsGranted = cameraPermissionStatus == .authorized && microphonePermissionStatus == .authorized
+        print("📋 PreviewManager: Permissions granted: \(permissionsGranted)")
+    }
+    
+    // MARK: - Preview Control
+    
+    func startPreview() {
+        guard permissionsGranted else {
+            print("❌ PreviewManager: Cannot start preview - permissions not granted")
+            return
+        }
+        
+        guard !selectedVideoDevice.isEmpty else {
+            print("❌ PreviewManager: Cannot start preview - no video device selected")
+            return
+        }
+        
+        startPreviewIfReady()
+    }
+    
+    private func startPreviewIfReady() {
+        guard permissionsGranted && !captureSession.isRunning && !selectedVideoDevice.isEmpty else { 
+            print("⚠️ PreviewManager: Not ready to start preview - permissions: \(permissionsGranted), running: \(captureSession.isRunning), device: \(selectedVideoDevice)")
+            return 
+        }
+        
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            self?.captureSession.startRunning()
+            DispatchQueue.main.async {
+                self?.isSessionRunning = self?.captureSession.isRunning ?? false
+                print("📹 PreviewManager: Preview session started - running: \(self?.isSessionRunning ?? false)")
+            }
+        }
+    }
+    
+    func stopPreview() {
+        if captureSession.isRunning {
+            captureSession.stopRunning()
+            isSessionRunning = false
+            print("📹 PreviewManager: Preview session stopped")
+        }
+    }
+    
+    // MARK: - Recording Control
+    
+    func startRecording(uploadEndpoint: String? = nil) -> Bool {
+        guard !isRecording else {
+            print("❌ PreviewManager: Already recording")
+            return false
+        }
+        
+        print("🎬 PreviewManager: Starting recording...")
+        
+        // Ensure clean state before starting new recording
+        cleanupRecordingState()
+        
+        // Setup HLS uploader if endpoint provided
+        if let endpoint = uploadEndpoint {
+            hlsUploader = HLSUploader(uploadEndpoint: endpoint)
+            setupHLSUploaderCallbacks()
+        }
+        
+        // Setup recording callbacks
+        setupRecordingCallbacks()
+        
+        // Start local recording
+        guard localRecorder.startRecording() else {
+            print("❌ PreviewManager: Failed to start local recording")
+            cleanupRecordingState()
+            return false
+        }
+        
+        // Start HLS segmentation
+        hlsSegmenter.startSegmenting()
+        
+        // Update state
+        isRecording = true
+        recordingStartTime = Date()
+        
+        // Start recording timer
+        recordingTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            self?.updateRecordingDuration()
+        }
+        
+        print("✅ PreviewManager: Recording started successfully")
+        return true
+    }
+    
+    func stopRecording() {
+        guard isRecording else {
+            print("❌ PreviewManager: Not currently recording")
+            return
+        }
+        
+        print("🛑 PreviewManager: Stopping recording...")
+        
+        // Stop recording
+        localRecorder.stopRecording()
+        hlsSegmenter.stopSegmenting()
+        
+        // Clean up state
+        cleanupRecordingState()
+        
+        print("✅ PreviewManager: Recording stopped")
+    }
+    
+    private func cleanupRecordingState() {
+        print("🧹 PreviewManager: Cleaning up recording state")
+        
+        // Stop and clean up timer
+        recordingTimer?.invalidate()
+        recordingTimer = nil
+        
+        // Reset state variables
+        isRecording = false
+        recordingStartTime = nil
+        recordingDuration = 0
+        
+        // Clean up uploader
+        hlsUploader = nil
+        
+        print("✅ PreviewManager: Recording state cleanup completed")
+    }
+    
+    private func updateRecordingDuration() {
+        guard let startTime = recordingStartTime else { return }
+        recordingDuration = Date().timeIntervalSince(startTime)
+    }
+    
+    private func setupRecordingCallbacks() {
+        localRecorder.onRecordingStarted = {
+            print("📹 PreviewManager: Local recording started")
+        }
+        
+        localRecorder.onRecordingStopped = { url in
+            print("📹 PreviewManager: Local recording saved to: \(url.path)")
+        }
+        
+        localRecorder.onRecordingError = { [weak self] error in
+            print("❌ PreviewManager: Recording error - \(error.localizedDescription)")
+            DispatchQueue.main.async {
+                self?.isRecording = false
+                self?.recordingTimer?.invalidate()
+                self?.recordingTimer = nil
+            }
+        }
+        
+        hlsSegmenter.onSegmentReady = { [weak self] segmentURL in
+            print("📺 PreviewManager: HLS segment ready: \(segmentURL.lastPathComponent)")
+            self?.hlsUploader?.uploadSegment(segmentURL)
+        }
+        
+        hlsSegmenter.onPlaylistUpdated = { [weak self] playlistURL in
+            print("📺 PreviewManager: HLS playlist updated")
+            self?.hlsUploader?.uploadPlaylist(playlistURL)
+        }
+        
+        hlsSegmenter.onError = { error in
+            print("❌ PreviewManager: HLS segmentation error - \(error.localizedDescription)")
+        }
+    }
+    
+    private func setupHLSUploaderCallbacks() {
+        hlsUploader?.onUploadProgress = { filename, progress in
+            print("📤 PreviewManager: Upload progress for \(filename): \(Int(progress * 100))%")
+        }
+        
+        hlsUploader?.onUploadComplete = { filename in
+            print("✅ PreviewManager: Upload complete for \(filename)")
+        }
+        
+        hlsUploader?.onUploadError = { filename, error in
+            print("❌ PreviewManager: Upload error for \(filename) - \(error.localizedDescription)")
+        }
+    }
+    
     deinit {
+        print("💀 PreviewManager: Deinitializing")
+        stopRecording()
+        cleanupRecordingState()
         if captureSession.isRunning {
             captureSession.stopRunning()
         }
@@ -225,10 +657,41 @@ class VideoPreviewManager: NSObject, ObservableObject {
 
 extension VideoPreviewManager: AVCaptureVideoDataOutputSampleBufferDelegate, AVCaptureAudioDataOutputSampleBufferDelegate {
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
+        // Only process samples if we're actively recording
+        guard isRecording else { return }
+        
         if output is AVCaptureVideoDataOutput {
-            encoder.encode(sampleBuffer: sampleBuffer)
+            // Ensure both recorders are in valid state before processing
+            if localRecorder.recordingState {
+                localRecorder.processVideoSampleBuffer(sampleBuffer)
+                hlsSegmenter.processVideoSampleBuffer(sampleBuffer)
+            }
         } else if output is AVCaptureAudioDataOutput {
-            audioEncoder.encode(sampleBuffer: sampleBuffer)
+            // Ensure both recorders are in valid state before processing  
+            if localRecorder.recordingState {
+                localRecorder.processAudioSampleBuffer(sampleBuffer)
+                hlsSegmenter.processAudioSampleBuffer(sampleBuffer)
+            }
         }
     }
 }
+
+// MARK: - AVAuthorizationStatus Extension
+
+extension AVAuthorizationStatus {
+    var description: String {
+        switch self {
+        case .notDetermined:
+            return "Not Determined"
+        case .restricted:
+            return "Restricted"
+        case .denied:
+            return "Denied"
+        case .authorized:
+            return "Authorized"
+        @unknown default:
+            return "Unknown"
+        }
+    }
+}
+

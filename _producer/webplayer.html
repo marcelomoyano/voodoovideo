@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Voodoo WebRTC Player</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: #000;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+        
+        .container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+            background: #000;
+        }
+        
+        /* Single Stream Mode */
+        .single-stream {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            background: #000;
+        }
+        
+        .single-stream video {
+            width: 100% !important;
+            height: 100% !important;
+            object-fit: cover;
+            background: #000;
+            display: block !important;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        
+        /* Multi-Stream Grid Mode */
+        .multi-stream {
+            display: grid;
+            width: 100%;
+            height: 100%;
+            gap: 2px;
+            background: #111;
+        }
+        
+        .stream-container {
+            position: relative;
+            background: #000;
+            overflow: hidden;
+        }
+        
+        .stream-container video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .stream-label {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            z-index: 10;
+        }
+        
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #fff;
+            font-size: 16px;
+            text-align: center;
+        }
+        
+        .error {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #ff4444;
+            font-size: 14px;
+            text-align: center;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 8px;
+        }
+        
+        .unmute-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            cursor: pointer;
+            z-index: 100;
+            transition: opacity 0.3s ease;
+        }
+        
+        .unmute-overlay:hover {
+            background: rgba(0, 0, 0, 0.8);
+        }
+        
+        .unmute-button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        
+        .unmute-button:hover {
+            background: #0056b3;
+        }
+        
+        /* Grid layouts for different stream counts */
+        .grid-1 { grid-template-columns: 1fr; }
+        .grid-2 { grid-template-columns: 1fr 1fr; }
+        .grid-3 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+        .grid-4 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+        .grid-5, .grid-6 { grid-template-columns: 1fr 1fr 1fr; grid-template-rows: 1fr 1fr; }
+        .grid-7, .grid-8, .grid-9 { grid-template-columns: 1fr 1fr 1fr; grid-template-rows: 1fr 1fr 1fr; }
+        .grid-10, .grid-11, .grid-12 { grid-template-columns: 1fr 1fr 1fr 1fr; grid-template-rows: 1fr 1fr 1fr; }
+        
+        /* Special case for 3 streams - make first one span 2 columns */
+        .grid-3 .stream-container:first-child {
+            grid-column: span 2;
+        }
+    </style>
+</head>
+<body>
+    <div class="container" id="container">
+        <div class="loading" id="loading">Loading streams...</div>
+    </div>
+
+    <script>
+        class WebRTCPlayer {
+            constructor() {
+                this.streams = new Map();
+                this.container = document.getElementById('container');
+                this.loading = document.getElementById('loading');
+                this.mediaServer = 'https://live.voodoostudios.tv';
+                
+                // Parse URL parameters
+                const params = new URLSearchParams(window.location.search);
+                this.room = params.get('room');
+                this.streamId = params.get('streamId');
+                this.specificStream = params.get('stream'); // Alternative parameter
+                
+                // Determine mode
+                if (this.streamId || this.specificStream) {
+                    this.mode = 'single';
+                    this.targetStream = this.streamId || this.specificStream;
+                } else if (this.room) {
+                    this.mode = 'multi';
+                } else {
+                    this.showError('Missing parameters. Use: ?room=roomname&streamId=streamname or ?room=roomname');
+                    return;
+                }
+                
+                console.log(`WebRTC Player initialized - Mode: ${this.mode}, Room: ${this.room}, Stream: ${this.targetStream || 'all'}`);
+                this.init();
+            }
+            
+            async init() {
+                if (this.mode === 'single') {
+                    await this.loadSingleStream();
+                } else {
+                    await this.connectToRoom();
+                }
+            }
+            
+            async loadSingleStream() {
+                const whepUrl = `${this.mediaServer}/${this.room}/${this.targetStream}/whep`;
+                console.log(`Loading single stream: ${whepUrl}`);
+                
+                this.container.innerHTML = '<div class="single-stream" id="singleStream"></div>';
+                const streamContainer = document.getElementById('singleStream');
+                
+                try {
+                    const success = await this.createWebRTCConnection(whepUrl, streamContainer, this.targetStream);
+                    if (!success) {
+                        this.showError(`Failed to load stream: ${this.targetStream}`);
+                    }
+                } catch (error) {
+                    console.error('Error loading single stream:', error);
+                    this.showError(`Error loading stream: ${error.message}`);
+                }
+            }
+            
+            async connectToRoom() {
+                // Connect to WebSocket to get active streams in room
+                const wsUrl = window.location.hostname === 'localhost' || 
+                             window.location.hostname === '127.0.0.1' ? 
+                             'ws://localhost:3000' : 'wss://ws.streamless.io';
+                
+                console.log(`Connecting to WebSocket: ${wsUrl}`);
+                
+                try {
+                    const socket = io(wsUrl, {
+                        transports: ['websocket'],
+                        timeout: 10000
+                    });
+                    
+                    socket.on('connect', () => {
+                        console.log('WebSocket connected, joining room:', this.room);
+                        socket.emit('join-room', {
+                            room: this.room,
+                            role: 'viewer',
+                            participantId: 'webplayer',
+                            participantName: 'WebRTC Player'
+                        });
+                        
+                        // Request room state
+                        setTimeout(() => {
+                            socket.emit('get-room-state', { room: this.room });
+                        }, 500);
+                    });
+                    
+                    socket.on('room-state', (data) => {
+                        console.log('Received room state:', data);
+                        this.handleRoomState(data);
+                    });
+                    
+                    socket.on('stream-registered', (data) => {
+                        console.log('Stream registered:', data);
+                        if (data.status === 'streaming') {
+                            this.addStream(data.streamId);
+                        }
+                    });
+                    
+                    socket.on('stream-status', (data) => {
+                        console.log('Stream status update:', data);
+                        if (data.status === 'streaming' && !this.streams.has(data.streamId)) {
+                            this.addStream(data.streamId);
+                        } else if (data.status === 'stopped' && this.streams.has(data.streamId)) {
+                            this.removeStream(data.streamId);
+                        }
+                    });
+                    
+                    socket.on('stream-removed', (data) => {
+                        console.log('Stream removed:', data);
+                        this.removeStream(data.streamId);
+                    });
+                    
+                    socket.on('connect_error', (error) => {
+                        console.error('WebSocket connection error:', error);
+                        this.showError(`Connection failed: ${error.message}`);
+                    });
+                    
+                } catch (error) {
+                    console.error('Failed to connect to WebSocket:', error);
+                    this.showError(`Failed to connect: ${error.message}`);
+                }
+            }
+            
+            handleRoomState(data) {
+                const streams = data.streams || [];
+                const participants = data.participants || [];
+                
+                console.log(`Processing room state: ${streams.length} streams, ${participants.length} participants`);
+                
+                // Process active streams
+                streams.forEach(stream => {
+                    if (stream.status === 'streaming') {
+                        this.addStream(stream.streamId);
+                    }
+                });
+                
+                // Process participants who might be streaming
+                participants.forEach(participant => {
+                    if (participant.role === 'streamer' && participant.streaming) {
+                        this.addStream(participant.participantId);
+                    }
+                });
+                
+                if (this.streams.size === 0) {
+                    this.showError(`No active streams found in room: ${this.room}`);
+                }
+            }
+            
+            async addStream(streamId) {
+                if (this.streams.has(streamId)) {
+                    console.log(`Stream ${streamId} already exists`);
+                    return;
+                }
+                
+                console.log(`Adding stream: ${streamId}`);
+                this.streams.set(streamId, { streamId, status: 'loading' });
+                
+                await this.updateLayout();
+                
+                const whepUrl = `${this.mediaServer}/${this.room}/${streamId}/whep`;
+                const streamContainer = document.getElementById(`stream-${streamId}`);
+                
+                if (streamContainer) {
+                    const success = await this.createWebRTCConnection(whepUrl, streamContainer, streamId);
+                    if (success) {
+                        this.streams.set(streamId, { streamId, status: 'playing' });
+                    } else {
+                        this.removeStream(streamId);
+                    }
+                }
+            }
+            
+            removeStream(streamId) {
+                console.log(`Removing stream: ${streamId}`);
+                
+                if (this.streams.has(streamId)) {
+                    // Clean up WebRTC connection
+                    const streamContainer = document.getElementById(`stream-${streamId}`);
+                    if (streamContainer) {
+                        const video = streamContainer.querySelector('video');
+                        if (video && video.srcObject) {
+                            video.srcObject.getTracks().forEach(track => track.stop());
+                            video.srcObject = null;
+                        }
+                    }
+                    
+                    this.streams.delete(streamId);
+                    this.updateLayout();
+                }
+            }
+            
+            async updateLayout() {
+                const streamCount = this.streams.size;
+                
+                if (streamCount === 0) {
+                    this.container.innerHTML = '<div class="loading">No active streams</div>';
+                    return;
+                }
+                
+                // Create grid layout
+                const gridClass = `grid-${streamCount}`;
+                this.container.innerHTML = `<div class="multi-stream ${gridClass}" id="streamGrid"></div>`;
+                
+                const grid = document.getElementById('streamGrid');
+                
+                // Create stream containers
+                for (const [streamId] of this.streams) {
+                    const streamDiv = document.createElement('div');
+                    streamDiv.className = 'stream-container';
+                    streamDiv.id = `stream-${streamId}`;
+                    streamDiv.innerHTML = `
+                        <div class="stream-label">${streamId}</div>
+                        <div class="loading">Connecting...</div>
+                    `;
+                    grid.appendChild(streamDiv);
+                }
+            }
+            
+            async createWebRTCConnection(whepUrl, container, streamId) {
+                try {
+                    console.log(`Creating WebRTC connection for ${streamId}: ${whepUrl}`);
+                    
+                    // Create RTCPeerConnection
+                    const pc = new RTCPeerConnection({
+                        iceServers: [
+                            { urls: 'stun:stun.l.google.com:19302' }
+                        ]
+                    });
+                    
+                    // Create video element
+                    const video = document.createElement('video');
+                    video.setAttribute('autoplay', '');
+                    video.setAttribute('playsinline', '');
+                    video.setAttribute('webkit-playsinline', '');
+                    video.muted = true; // Start muted to allow autoplay
+                    video.controls = false;
+                    video.defaultMuted = true;
+                    
+                    // Force styling
+                    video.style.cssText = `
+                        width: 100% !important;
+                        height: 100% !important;
+                        object-fit: cover;
+                        background: #000;
+                        display: block !important;
+                        position: absolute;
+                        top: 0;
+                        left: 0;
+                        z-index: 1;
+                    `;
+                    
+                    // Track collection for proper stream assembly
+                    const tracks = { video: null, audio: null };
+                    let streamCreated = false;
+                    
+                    pc.ontrack = (event) => {
+                        console.log(`Received track for ${streamId}:`, event.track.kind, event.track.readyState);
+                        
+                        tracks[event.track.kind] = event.track;
+                        
+                        // Only proceed when we have both tracks or if we get a video track
+                        if (!streamCreated && tracks.video) {
+                            streamCreated = true;
+                            
+                            // Create MediaStream with collected tracks
+                            const mediaStream = new MediaStream();
+                            if (tracks.video) mediaStream.addTrack(tracks.video);
+                            if (tracks.audio) mediaStream.addTrack(tracks.audio);
+                            
+                            // Wait for audio track if not received yet
+                            if (!tracks.audio) {
+                                // Give audio track a moment to arrive
+                                setTimeout(() => {
+                                    if (tracks.audio) {
+                                        mediaStream.addTrack(tracks.audio);
+                                        console.log(`Added audio track to existing stream for ${streamId}`);
+                                    }
+                                }, 100);
+                            }
+                            
+                            console.log(`Creating MediaStream for ${streamId}:`, mediaStream, 'Tracks:', mediaStream.getTracks().length);
+                            console.log('Track details:', mediaStream.getTracks().map(t => ({
+                                kind: t.kind,
+                                readyState: t.readyState,
+                                enabled: t.enabled,
+                                id: t.id
+                            })));
+                            
+                            // Set up video element first
+                            container.innerHTML = '';
+                            if (this.mode === 'multi') {
+                                container.innerHTML = `<div class="stream-label">${streamId}</div>`;
+                            }
+                            
+                            container.appendChild(video);
+                            
+                            // Set srcObject and try to play immediately
+                            video.srcObject = mediaStream;
+                            video.muted = false; // Allow audio
+                            
+                            // Try to play immediately
+                            setTimeout(() => {
+                                video.play().then(() => {
+                                    console.log(`Video playing for ${streamId}`);
+                                }).catch(e => {
+                                    console.error(`Failed to play ${streamId}:`, e);
+                                    // If autoplay fails, show unmute overlay
+                                    const overlay = document.createElement('div');
+                                    overlay.className = 'unmute-overlay';
+                                    overlay.innerHTML = `
+                                        <div>🔊 Click to enable sound</div>
+                                        <button class="unmute-button">Unmute & Play</button>
+                                    `;
+                                    container.appendChild(overlay);
+                                    
+                                    overlay.addEventListener('click', () => {
+                                        video.muted = false;
+                                        video.play().then(() => {
+                                            overlay.style.display = 'none';
+                                            console.log(`Unmuted and playing ${streamId}`);
+                                        }).catch(err => {
+                                            console.error(`Failed to unmute and play ${streamId}:`, err);
+                                        });
+                                    });
+                                });
+                            }, 100);
+                            
+                            // Event handlers
+                            video.onloadstart = () => {
+                                console.log(`Video load started for ${streamId}`);
+                            };
+                            
+                            video.onloadedmetadata = () => {
+                                console.log(`Video metadata loaded for ${streamId}:`, video.videoWidth, 'x', video.videoHeight);
+                                video.play().then(() => {
+                                    console.log(`Video playing for ${streamId}`);
+                                }).catch(e => {
+                                    console.warn(`Metadata play failed for ${streamId}:`, e);
+                                });
+                            };
+                            
+                            video.oncanplay = () => {
+                                console.log(`Video can play for ${streamId}`);
+                                if (video.paused) {
+                                    video.play().catch(e => console.warn(`Can play failed:`, e));
+                                }
+                            };
+                            
+                            video.oncanplaythrough = () => {
+                                console.log(`Video can play through for ${streamId}`);
+                                if (video.paused) {
+                                    video.play().catch(e => console.warn(`Can play through failed:`, e));
+                                }
+                            };
+                            
+                            video.onerror = (e) => {
+                                console.error(`Video error for ${streamId}:`, e, video.error);
+                            };
+                            
+                            video.onstalled = () => {
+                                console.warn(`Video stalled for ${streamId}`);
+                            };
+                            
+                            video.onwaiting = () => {
+                                console.log(`Video waiting for ${streamId}`);
+                            };
+                            
+                            video.onplaying = () => {
+                                console.log(`Video playing event for ${streamId}`);
+                            };
+                            
+                            // Force muted autoplay (should work in all browsers)
+                            setTimeout(() => {
+                                console.log(`Attempting muted autoplay for ${streamId}`);
+                                video.muted = true;
+                                video.play().then(() => {
+                                    console.log(`Muted autoplay succeeded for ${streamId}`);
+                                    // Video is now playing muted, overlay shows unmute option
+                                }).catch(e => {
+                                    console.error(`Even muted autoplay failed for ${streamId}:`, e);
+                                    // Show error in overlay
+                                    overlay.innerHTML = `
+                                        <div>❌ Autoplay failed</div>
+                                        <button class="unmute-button">Click to Play</button>
+                                    `;
+                                });
+                            }, 100);
+                            
+                            // Debug logging
+                            setTimeout(() => {
+                                console.log(`Video debug for ${streamId}:`, {
+                                    readyState: video.readyState,
+                                    videoWidth: video.videoWidth,
+                                    videoHeight: video.videoHeight,
+                                    paused: video.paused,
+                                    muted: video.muted,
+                                    currentTime: video.currentTime,
+                                    tracks: mediaStream.getTracks().map(t => `${t.kind}: ${t.readyState}`)
+                                });
+                            }, 500);
+                            
+                            // Extended debug
+                            setTimeout(() => {
+                                console.log(`Video status after 2s for ${streamId}:`, {
+                                    readyState: video.readyState,
+                                    videoWidth: video.videoWidth,
+                                    videoHeight: video.videoHeight,
+                                    currentTime: video.currentTime,
+                                    duration: video.duration,
+                                    paused: video.paused,
+                                    networkState: video.networkState,
+                                    error: video.error
+                                });
+                            }, 2000);
+                        }
+                    };
+                    
+                    // Add transceivers for receiving
+                    pc.addTransceiver('video', { direction: 'recvonly' });
+                    pc.addTransceiver('audio', { direction: 'recvonly' });
+                    
+                    // Create offer
+                    const offer = await pc.createOffer();
+                    await pc.setLocalDescription(offer);
+                    
+                    // Send WHEP request
+                    const response = await fetch(whepUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/sdp'
+                        },
+                        body: offer.sdp
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`WHEP request failed: ${response.status} ${response.statusText}`);
+                    }
+                    
+                    const answerSdp = await response.text();
+                    await pc.setRemoteDescription({
+                        type: 'answer',
+                        sdp: answerSdp
+                    });
+                    
+                    console.log(`WebRTC connection established for ${streamId}`);
+                    return true;
+                    
+                } catch (error) {
+                    console.error(`Failed to create WebRTC connection for ${streamId}:`, error);
+                    container.innerHTML = `<div class="error">Failed to load ${streamId}<br>${error.message}</div>`;
+                    return false;
+                }
+            }
+            
+            showError(message) {
+                console.error('WebRTC Player Error:', message);
+                this.container.innerHTML = `<div class="error">${message}</div>`;
+            }
+        }
+        
+        // Auto-start when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new WebRTCPlayer();
+        });
+    </script>
+    
+    <!-- Socket.IO for multi-stream mode -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+</body>
+</html>

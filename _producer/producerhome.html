@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Studio Producer Control</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="https://cdn.ably.io/lib/ably.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lucide-static@0.321.0/font/lucide.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/lucide@0.321.0/dist/umd/lucide.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@1.4.12/dist/hls.min.js"></script>
+    <link rel="stylesheet" href="producer.css">
+    <script src="auth-fallback.js"></script>
+    <style>
+        /* Additional CSS variables for mobile compatibility */
+        :root {
+            --bg-secondary: #24283b;
+            --text-primary: #a9b1d6;
+            --text-secondary: #565f89;
+        }
+
+        .layout-container {
+            display: flex;
+            height: 100vh;
+            background: var(--bg-color);
+            position: relative;
+        }
+
+        .sidebar {
+            width: 380px;
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border-color);
+            padding: 20px;
+            overflow-y: auto;
+            flex-shrink: 0;
+            transition: transform 0.3s ease;
+        }
+
+        .main-content {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        /* Mobile menu toggle button */
+        .mobile-menu-toggle {
+            display: none;
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 1001;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 12px;
+            cursor: pointer;
+            color: var(--text-primary);
+            transition: all 0.3s ease;
+        }
+
+        .mobile-menu-toggle:hover {
+            background: var(--button-hover);
+        }
+
+        .mobile-menu-toggle i {
+            width: 20px;
+            height: 20px;
+        }
+
+        /* Mobile overlay */
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+        }
+        
+        .sidebar-header {
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .sidebar-section {
+            margin-bottom: 25px;
+        }
+        
+        .sidebar-section-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .sidebar-section-title i {
+            width: 16px;
+            height: 16px;
+        }
+        
+        .user-info {
+            background: var(--bg-color);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+        
+        .room-selector-wrapper {
+            background: var(--bg-color);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+        
+        .connection-status-wrapper {
+            background: var(--bg-color);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+        
+        .invite-wrapper {
+            background: var(--bg-color);
+            padding: 15px;
+            border-radius: 8px;
+        }
+        
+        .video-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 20px;
+            padding: 20px 0;
+        }
+        
+        .video-card {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+            transition: all 0.3s ease;
+        }
+        
+        .video-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+        }
+        
+        .video-header {
+            padding: 15px;
+            background: var(--bg-color);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .video-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        
+        .video-status {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 500;
+            text-transform: uppercase;
+        }
+        
+        .video-status.streaming {
+            background: var(--accent-green);
+            color: white;
+        }
+        
+        .video-status.ready {
+            background: var(--accent-blue);
+            color: white;
+        }
+        
+        .video-status.stopped {
+            background: var(--text-secondary);
+            color: white;
+        }
+        
+        .video-preview {
+            aspect-ratio: 16/9;
+            background: #000;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .video-preview video,
+        .video-preview iframe {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .video-placeholder {
+            color: var(--text-secondary);
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .video-controls {
+            padding: 15px;
+            display: flex;
+            gap: 6px;
+            flex-wrap: nowrap;
+        }
+        
+        .control-btn {
+            padding: 8px 10px;
+            border-radius: 6px;
+            border: none;
+            font-size: 11px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            flex: 1;
+            justify-content: center;
+            min-width: 0;
+            white-space: nowrap;
+        }
+        
+        .control-btn:hover {
+            transform: translateY(-1px);
+        }
+        
+        .control-btn.start {
+            background: var(--accent-green);
+            color: white;
+        }
+        
+        .control-btn.stop {
+            background: var(--accent-red);
+            color: white;
+        }
+        
+        .control-btn.link {
+            background: var(--accent-blue);
+            color: white;
+        }
+        
+        .control-btn.obs-add,
+        .control-btn.obs-solo {
+            background: var(--accent-purple);
+            color: white;
+        }
+        
+        .control-btn.obs-remove {
+            background: transparent;
+            color: var(--accent-purple);
+            border: 1px solid var(--accent-purple);
+        }
+        
+        .control-btn.obs-remove:not(:disabled):hover {
+            background: var(--accent-purple);
+            color: white;
+        }
+        
+        .video-card.in-obs-layout {
+            border-color: var(--accent-purple);
+            box-shadow: 0 0 0 2px rgba(107, 70, 193, 0.2);
+        }
+        
+        .control-btn.end {
+            background: transparent;
+            color: var(--text-secondary);
+            border: 1px solid var(--text-secondary);
+            transition: all 0.3s ease;
+            position: relative;
+        }
+        
+        .control-btn.end:hover {
+            background: var(--accent-red);
+            color: white;
+            border-color: var(--accent-red);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(220, 38, 127, 0.3);
+        }
+        
+        .control-btn.end:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 6px rgba(220, 38, 127, 0.3);
+        }
+        
+        .control-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .empty-grid {
+            grid-column: 1 / -1;
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-secondary);
+        }
+        
+        .main-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .logout-btn {
+            padding: 8px 16px;
+            background: transparent;
+            color: var(--accent-red);
+            border: 1px solid var(--accent-red);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        
+        .logout-btn:hover {
+            background: var(--accent-red);
+            color: white;
+        }
+
+        /* Mobile Responsive Styles */
+        @media (max-width: 768px) {
+            .layout-container {
+                flex-direction: column;
+            }
+
+            .mobile-menu-toggle {
+                display: block;
+            }
+
+            .sidebar {
+                position: fixed;
+                top: 0;
+                left: 0;
+                height: 100vh;
+                width: 320px;
+                z-index: 1000;
+                transform: translateX(-100%);
+                border-right: none;
+                box-shadow: 2px 0 10px rgba(0, 0, 0, 0.3);
+            }
+
+            .sidebar.open {
+                transform: translateX(0);
+            }
+
+            .sidebar-overlay.active {
+                display: block;
+            }
+
+            .main-content {
+                padding: 80px 15px 20px 15px;
+                width: 100%;
+            }
+
+            .main-header {
+                flex-direction: column;
+                gap: 15px;
+                align-items: flex-start;
+            }
+
+            .main-header h2 {
+                font-size: 16px;
+            }
+
+            .video-grid {
+                grid-template-columns: 1fr;
+                gap: 15px;
+                padding: 15px 0;
+            }
+
+            .video-card {
+                margin: 0;
+            }
+
+            .video-controls {
+                flex-wrap: wrap;
+                gap: 8px;
+            }
+
+            .control-btn {
+                font-size: 10px;
+                padding: 6px 8px;
+                min-width: 70px;
+            }
+
+            .sidebar-header h1 {
+                font-size: 18px;
+            }
+
+            .sidebar-section-title {
+                font-size: 13px;
+            }
+
+            .user-info,
+            .room-selector-wrapper,
+            .connection-status-wrapper,
+            .invite-wrapper {
+                padding: 12px;
+                margin-bottom: 12px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .sidebar {
+                width: 280px;
+            }
+
+            .main-content {
+                padding: 80px 10px 20px 10px;
+            }
+
+            .video-grid {
+                gap: 10px;
+            }
+
+            .video-header {
+                padding: 12px;
+            }
+
+            .video-controls {
+                padding: 12px;
+            }
+
+            .control-btn {
+                font-size: 9px;
+                padding: 5px 6px;
+                min-width: 60px;
+            }
+
+            .mobile-menu-toggle {
+                top: 15px;
+                left: 15px;
+                padding: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Mobile menu toggle button -->
+    <button class="mobile-menu-toggle" onclick="toggleMobileMenu()">
+        <i data-lucide="menu"></i>
+    </button>
+
+    <!-- Mobile sidebar overlay -->
+    <div class="sidebar-overlay" onclick="closeMobileMenu()"></div>
+
+    <div class="layout-container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h1 style="margin: 0; font-size: 20px; color: var(--text-primary);">Producer Control</h1>
+            </div>
+            
+            <!-- User Info Section -->
+            <div class="sidebar-section">
+                <div class="sidebar-section-title">
+                    <i data-lucide="user"></i>
+                    Account Info
+                </div>
+                <div class="user-info">
+                    <div style="font-size: 14px; font-weight: 600; margin-bottom: 8px;">
+                        Welcome, <span id="clientName"></span>
+                    </div>
+                    <div style="font-size: 12px; color: var(--text-secondary);">
+                        Rooms: <strong id="roomCount"></strong> | Max Streamers: <strong id="maxStreamersCount"></strong>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Room Selection Section -->
+            <div class="sidebar-section">
+                <div class="sidebar-section-title">
+                    <i data-lucide="home"></i>
+                    Room Management
+                </div>
+                
+                <!-- Room Selection for Multi-Room Users -->
+                <div id="roomSelection" class="room-selector-wrapper">
+                    <label style="font-size: 13px; font-weight: 500; margin-bottom: 8px; display: block;">Select Room:</label>
+                    <select id="roomSelector" style="
+                        width: 100%;
+                        padding: 10px;
+                        background: var(--bg-secondary);
+                        color: var(--text-primary);
+                        border: 1px solid var(--border-color);
+                        border-radius: 6px;
+                        font-size: 14px;
+                        cursor: pointer;
+                        margin-bottom: 12px;
+                    ">
+                        <option value="">Choose a room...</option>
+                    </select>
+                    
+                    <!-- Connection Status -->
+                    <div class="connection-status-wrapper">
+                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+                            <div id="connectionDot" style="width: 8px; height: 8px; border-radius: 50%; background: var(--accent-red);"></div>
+                            <span style="font-size: 13px; font-weight: 500;">Status: Disconnected</span>
+                        </div>
+                        <button class="connection-status" id="connectionStatus" onclick="handleConnectionClick()" style="
+                            width: 100%;
+                            padding: 10px;
+                            background: var(--accent-cyan);
+                            color: white;
+                            border: none;
+                            border-radius: 6px;
+                            font-weight: 500;
+                            cursor: pointer;
+                        ">Connect to Room</button>
+                    </div>
+                    
+                    <div id="currentRoom" style="display: none; margin-top: 10px; padding: 8px; background: var(--accent-green); color: white; border-radius: 4px; font-size: 12px; text-align: center;">
+                        Connected to: <span id="roomName"></span>
+                    </div>
+                </div>
+                
+                <!-- Manual Room Input (fallback) -->
+                <div id="manualRoomInput" class="room-selector-wrapper" style="display: none;">
+                    <label style="font-size: 13px; font-weight: 500; margin-bottom: 8px; display: block;">Room Name:</label>
+                    <input type="text" class="room-input" id="roomInput" placeholder="Enter room name" style="
+                        width: 100%;
+                        padding: 10px;
+                        background: var(--bg-secondary);
+                        color: var(--text-primary);
+                        border: 1px solid var(--border-color);
+                        border-radius: 6px;
+                        font-size: 14px;
+                        margin-bottom: 12px;
+                    " />
+                    <button class="connection-status" id="connectionStatusManual" onclick="handleConnectionClick()" style="
+                        width: 100%;
+                        padding: 10px;
+                        background: var(--accent-cyan);
+                        color: white;
+                        border: none;
+                        border-radius: 6px;
+                        font-weight: 500;
+                        cursor: pointer;
+                    ">Connect to Room</button>
+                </div>
+            </div>
+            
+            <!-- OBS Layout Control -->
+            <div class="sidebar-section" id="obsLayoutSection" style="display: none;">
+                <div class="sidebar-section-title">
+                    <i data-lucide="layout"></i>
+                    OBS Layout Control
+                </div>
+                
+                <div style="padding: 12px; background: var(--bg-secondary); border-radius: 6px;">
+                    <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 10px;">
+                        Current Layout: <span id="obsLayoutCount" style="color: var(--accent-purple); font-weight: 600;">0 streams</span>
+                    </div>
+                    <div id="obsLayoutList" style="font-size: 11px; color: var(--text-secondary); margin-bottom: 12px; max-height: 100px; overflow-y: auto;"></div>
+                    <button onclick="clearOBSLayout()" style="
+                        width: 100%;
+                        padding: 8px;
+                        background: transparent;
+                        color: var(--accent-purple);
+                        border: 1px solid var(--accent-purple);
+                        border-radius: 4px;
+                        cursor: pointer;
+                        font-size: 12px;
+                        font-weight: 500;
+                    ">Clear Layout</button>
+                    <button onclick="openProgramView()" style="
+                        width: 100%;
+                        padding: 8px 12px;
+                        margin-top: 8px;
+                        background: var(--accent-green);
+                        color: white;
+                        border: none;
+                        border-radius: 4px;
+                        cursor: pointer;
+                        font-size: 12px;
+                        font-weight: 500;
+                    ">Program View Link</button>
+                </div>
+            </div>
+            
+            <!-- Invite Section -->
+            <div class="sidebar-section" id="inviteSection" style="display: none;">
+                <div class="sidebar-section-title">
+                    <i data-lucide="user-plus"></i>
+                    Invite Participants
+                </div>
+                
+                <div class="invite-wrapper">
+                    <!-- Guest Invite -->
+                    <div style="margin-bottom: 20px; padding: 12px; background: var(--bg-secondary); border-radius: 6px; border-left: 3px solid var(--accent-blue);">
+                        <div style="font-size: 13px; font-weight: 600; color: var(--accent-blue); margin-bottom: 6px;">Conference Guests</div>
+                        <p style="font-size: 11px; color: var(--text-secondary); margin-bottom: 10px;">Communication only, no streaming controls</p>
+                        <button id="guestInviteBtn" onclick="generateGuestInvite()" style="
+                            width: 100%;
+                            padding: 8px;
+                            background: var(--accent-blue);
+                            color: white;
+                            border: none;
+                            border-radius: 4px;
+                            cursor: pointer;
+                            font-size: 12px;
+                            font-weight: 500;
+                        ">Invite Guest to Conference</button>
+                    </div>
+                    
+                    <!-- Streamer Invite -->
+                    <div style="padding: 12px; background: var(--bg-secondary); border-radius: 6px; border-left: 3px solid var(--accent-orange);">
+                        <div style="font-size: 13px; font-weight: 600; color: var(--accent-orange); margin-bottom: 6px;">Content Streamers</div>
+                        <p style="font-size: 11px; color: var(--text-secondary); margin-bottom: 10px;">Full controls (streaming + conference)</p>
+                        
+                        <div style="margin-bottom: 10px;">
+                            <label style="font-size: 11px; display: flex; align-items: center; gap: 5px; cursor: pointer;">
+                                <input type="checkbox" id="autoAssignToggle" checked style="margin: 0;">
+                                Auto-assign (streamer1-10)
+                            </label>
+                        </div>
+                        
+                        <input type="text" id="streamerNameInput" placeholder="Streamer name" style="
+                            width: 100%;
+                            padding: 8px;
+                            background: var(--bg-color);
+                            color: var(--text-primary);
+                            border: 1px solid var(--border-color);
+                            border-radius: 4px;
+                            font-size: 12px;
+                            margin-bottom: 10px;
+                        " />
+                        
+                        <button class="invite-btn" id="inviteBtn" onclick="generateInviteLink()" style="
+                            width: 100%;
+                            padding: 8px;
+                            background: var(--accent-orange);
+                            color: white;
+                            border: none;
+                            border-radius: 4px;
+                            cursor: pointer;
+                            font-size: 12px;
+                            font-weight: 500;
+                        ">Generate Invite Link</button>
+                    </div>
+                    
+                    <!-- Management Buttons -->
+                    <div style="margin-top: 15px; display: flex; gap: 8px;">
+                        <button onclick="cleanupInactiveStreams()" style="
+                            flex: 1;
+                            padding: 8px;
+                            background: var(--accent-orange);
+                            color: white;
+                            border: none;
+                            border-radius: 4px;
+                            cursor: pointer;
+                            font-size: 11px;
+                            font-weight: 500;
+                        ">Clean Up</button>
+                        <button onclick="resetStreamerCounter()" style="
+                            flex: 1;
+                            padding: 8px;
+                            background: var(--accent-blue);
+                            color: white;
+                            border: none;
+                            border-radius: 4px;
+                            cursor: pointer;
+                            font-size: 11px;
+                            font-weight: 500;
+                        ">Reset Counter</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Main Content -->
+        <div class="main-content">
+            <div class="main-header">
+                <h2 style="margin: 0; font-size: 18px; color: var(--text-primary);">Live Streams</h2>
+                <button onclick="logout()" class="logout-btn">Logout</button>
+            </div>
+            
+            <!-- Video Grid -->
+            <div class="video-grid" id="streamsContainer">
+                <div class="empty-grid">
+                    <div style="font-size: 48px; margin-bottom: 16px; opacity: 0.3;"><i data-lucide="video" style="width: 48px; height: 48px;"></i></div>
+                    <div style="font-size: 16px; margin-bottom: 8px;">No streams connected yet</div>
+                    <div style="font-size: 14px;">Connect to a room and invite streamers to get started</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="log" id="log" style="position: fixed; bottom: 0; left: 0; right: 0; height: 200px; background: var(--bg-secondary); border-top: 1px solid var(--border-color); padding: 10px; overflow-y: auto; z-index: 1000; display: none;"></div>
+
+    <script src="producerhome.js"></script>
+</body>
+</html>

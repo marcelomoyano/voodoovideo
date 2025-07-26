@@ -3,6 +3,7 @@ import AVFoundation
 
 struct ContentView: View {
     @StateObject private var videoManager = VideoManager()
+    @StateObject private var videoPreviewManager = VideoPreviewManager()
     @State private var isSidebarVisible = true
     
     var body: some View {
@@ -18,8 +19,8 @@ struct ContentView: View {
 
             // Content Area
             ZStack(alignment: .leading) {
-                VideoPreviewView(videoManager: videoManager)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                VideoPreviewView(videoManager: videoManager, videoPreviewManager: videoPreviewManager)
+                    .frame(maxWidth: CGFloat.infinity, maxHeight: CGFloat.infinity)
 
                 if isSidebarVisible {
                     VStack(spacing: 0) {
@@ -55,9 +56,20 @@ struct ContentView: View {
                         
                         ScrollView {
                             VStack(spacing: 0) {
+                                // Permissions Section
+                                Text("Permissions")
+                                    .font(.headline)
+                                    .frame(maxWidth: CGFloat.infinity, alignment: .leading)
+                                    .padding(.horizontal, 10)
+                                    .padding(.top, 15)
+                                    .padding(.bottom, 5)
+                                    .foregroundColor(.white)
+
+                                permissionsSection
+                                
                                 Text("Video Device")
                                     .font(.headline)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .frame(maxWidth: CGFloat.infinity, alignment: .leading)
                                     .padding(.horizontal, 10)
                                     .padding(.top, 15)
                                     .padding(.bottom, 5)
@@ -68,7 +80,7 @@ struct ContentView: View {
 
                                 Text("Audio Device")
                                     .font(.headline)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .frame(maxWidth: CGFloat.infinity, alignment: .leading)
                                     .padding(.horizontal, 10)
                                     .padding(.top, 15)
                                     .padding(.bottom, 5)
@@ -78,7 +90,7 @@ struct ContentView: View {
 
                                 Text("Settings")
                                     .font(.headline)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .frame(maxWidth: CGFloat.infinity, alignment: .leading)
                                     .padding(.horizontal, 10)
                                     .padding(.top, 15)
                                     .padding(.bottom, 5)
@@ -88,7 +100,7 @@ struct ContentView: View {
 
                                 Text("Video Output Quality")
                                     .font(.headline)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .frame(maxWidth: CGFloat.infinity, alignment: .leading)
                                     .padding(.horizontal, 10)
                                     .padding(.top, 15)
                                     .padding(.bottom, 5)
@@ -100,8 +112,7 @@ struct ContentView: View {
 
                         Spacer()
 
-                        outputURLField
-                        startButton
+                        recordingControls
                     }
                     .frame(width: 350)
                     .background(Color(red: 24/255, green: 25/255, blue: 38/255))
@@ -110,9 +121,28 @@ struct ContentView: View {
                 }
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: CGFloat.infinity, maxHeight: CGFloat.infinity)
         .animation(.easeInOut(duration: 0.2), value: videoManager.isAudioMonitoringEnabled)
         .animation(.easeInOut(duration: 0.25), value: isSidebarVisible)
+        .onReceive(videoManager.$selectedVideoDevice) { deviceID in
+            videoPreviewManager.selectedVideoDevice = deviceID
+        }
+        .onReceive(videoManager.$selectedAudioDevice) { deviceID in
+            videoPreviewManager.selectedAudioDevice = deviceID
+        }
+        .onReceive(videoManager.$isAudioMonitoringEnabled) { enabled in
+            videoPreviewManager.setAudioMonitoring(enabled: enabled)
+        }
+        .onReceive(videoManager.$audioMonitoringVolume) { volume in
+            videoPreviewManager.setAudioMonitoringVolume(volume)
+        }
+        .onAppear {
+            // Check permissions when the view appears
+            videoPreviewManager.checkPermissions()
+            if videoPreviewManager.permissionsGranted {
+                videoPreviewManager.startPreview()
+            }
+        }
     }
     
     // Video Source Picker
@@ -354,68 +384,214 @@ struct ContentView: View {
         }
     }
     
-    // Output URL Field
-    private var outputURLField: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Output")
+    // Recording Controls
+    private var recordingControls: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Recording")
                 .font(.headline)
                 .padding(.horizontal, 10)
                 .foregroundColor(.white)
             
+            // Recording Status
             HStack {
-                Text("URL")
-                    .frame(width: 30, alignment: .leading)
-                    .foregroundColor(.white)
+                Circle()
+                    .fill(videoPreviewManager.isRecording ? Color.red : Color.gray)
+                    .frame(width: 8, height: 8)
                 
-                TextField("rtmp://", text: $videoManager.outputURL)
+                Text(videoPreviewManager.isRecording ? "RECORDING" : "READY")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(videoPreviewManager.isRecording ? .red : .gray)
+                
+                Spacer()
+                
+                if videoPreviewManager.isRecording {
+                    Text(formatDuration(videoPreviewManager.recordingDuration))
+                        .font(.system(size: 12, design: .monospaced))
+                        .foregroundColor(.white)
+                }
+            }
+            .padding(.horizontal, 10)
+            
+            // HLS Upload URL Field
+            VStack(alignment: .leading, spacing: 4) {
+                Text("HLS Upload URL (Optional)")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+                    .padding(.horizontal, 10)
+                
+                TextField("https://your-hls-endpoint.com/upload", text: $videoManager.hlsUploadURL)
                     .textFieldStyle(PlainTextFieldStyle())
-                    .padding(4)
+                    .padding(6)
                     .background(Color(red: 48/255, green: 50/255, blue: 68/255).opacity(0.8))
                     .cornerRadius(4)
                     .foregroundColor(.white)
+                    .padding(.horizontal, 10)
+            }
+            
+            // Record Button
+            Button(action: {
+                if videoPreviewManager.isRecording {
+                    videoPreviewManager.stopRecording()
+                } else {
+                    let uploadEndpoint = videoManager.hlsUploadURL.isEmpty ? nil : videoManager.hlsUploadURL
+                    _ = videoPreviewManager.startRecording(uploadEndpoint: uploadEndpoint)
+                }
+            }) {
+                HStack {
+                    Image(systemName: videoPreviewManager.isRecording ? "stop.circle.fill" : "record.circle")
+                        .foregroundColor(.white)
+                    
+                    Text(videoPreviewManager.isRecording ? "Stop Recording" : "Start Recording")
+                        .foregroundColor(.white)
+                }
+                .padding(.vertical, 8)
+                .padding(.horizontal, 12)
+                .frame(maxWidth: CGFloat.infinity)
+                .background(videoPreviewManager.isRecording ? Color.red : Color(red: 122/255, green: 162/255, blue: 247/255))
+                .cornerRadius(6)
+            }
+            .buttonStyle(PlainButtonStyle())
+            .padding(.horizontal, 10)
+            .disabled(!videoPreviewManager.permissionsGranted && !videoPreviewManager.isRecording)
+            .opacity((!videoPreviewManager.permissionsGranted && !videoPreviewManager.isRecording) ? 0.5 : 1.0)
+            
+            // Recording Info
+            VStack(alignment: .leading, spacing: 4) {
+                Text("• Local: HEVC 1080p 30fps 10Mbps")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+                
+                Text("• HLS: H.264 segments for upload")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+                
+                Text("• Files saved to Documents folder")
+                    .font(.caption)
+                    .foregroundColor(.gray)
             }
             .padding(.horizontal, 10)
         }
         .padding(.bottom, 10)
     }
     
-    // Start Button
-    private var startButton: some View {
-        Button(action: {
-            videoManager.isStreaming.toggle()
-        }) {
+    // Permissions Section
+    private var permissionsSection: some View {
+        VStack(spacing: 8) {
+            // Camera Permission
             HStack {
-                Image(systemName: "record.circle")
+                Circle()
+                    .fill(videoPreviewManager.cameraPermissionStatus == .authorized ? Color.green : Color.red)
+                    .frame(width: 8, height: 8)
+                
+                Text("Camera")
+                    .frame(width: 60, alignment: .leading)
                     .foregroundColor(.white)
                 
-                Text(videoManager.isStreaming ? "Stop Stream" : "Start Stream")
+                Text(videoPreviewManager.cameraPermissionStatus.description)
+                    .font(.caption)
+                    .foregroundColor(.gray)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                
+                if videoPreviewManager.cameraPermissionStatus != .authorized {
+                    Button("Grant") {
+                        videoPreviewManager.requestCameraPermission()
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.blue)
                     .foregroundColor(.white)
+                    .cornerRadius(4)
+                    .font(.caption)
+                }
             }
-            .padding(.vertical, 8)
-            .padding(.horizontal, 12)
-            .frame(maxWidth: .infinity)
-            .background(Color(red: 122/255, green: 162/255, blue: 247/255)) // Tokyo Night Accent
-            .cornerRadius(6)
+            .padding(.horizontal, 10)
+            
+            // Microphone Permission
+            HStack {
+                Circle()
+                    .fill(videoPreviewManager.microphonePermissionStatus == .authorized ? Color.green : Color.red)
+                    .frame(width: 8, height: 8)
+                
+                Text("Audio")
+                    .frame(width: 60, alignment: .leading)
+                    .foregroundColor(.white)
+                
+                Text(videoPreviewManager.microphonePermissionStatus.description)
+                    .font(.caption)
+                    .foregroundColor(.gray)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                
+                if videoPreviewManager.microphonePermissionStatus != .authorized {
+                    Button("Grant") {
+                        videoPreviewManager.requestMicrophonePermission()
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.blue)
+                    .foregroundColor(.white)
+                    .cornerRadius(4)
+                    .font(.caption)
+                }
+            }
+            .padding(.horizontal, 10)
+            
+            // Overall status
+            if videoPreviewManager.permissionsGranted {
+                HStack {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.green)
+                    Text("All permissions granted")
+                        .font(.caption)
+                        .foregroundColor(.green)
+                }
+                .padding(.horizontal, 10)
+                .padding(.top, 4)
+            } else {
+                HStack {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(.orange)
+                    Text("Camera and microphone access required")
+                        .font(.caption)
+                        .foregroundColor(.orange)
+                }
+                .padding(.horizontal, 10)
+                .padding(.top, 4)
+            }
         }
-        .buttonStyle(PlainButtonStyle())
-        .padding(10)
+        .padding(.bottom, 8)
+    }
+    
+    private func formatDuration(_ duration: TimeInterval) -> String {
+        let hours = Int(duration) / 3600
+        let minutes = (Int(duration) % 3600) / 60
+        let seconds = Int(duration) % 60
+        
+        if hours > 0 {
+            return String(format: "%02d:%02d:%02d", hours, minutes, seconds)
+        } else {
+            return String(format: "%02d:%02d", minutes, seconds)
+        }
     }
 }
 
 struct VideoPreviewView: View {
     @ObservedObject var videoManager: VideoManager
+    @ObservedObject var videoPreviewManager: VideoPreviewManager
     
     var body: some View {
         GeometryReader { geometry in
             ZStack {
                 // Use the representable view for the actual video display
-                VideoPreviewRepresentable(videoManager: videoManager)
+                VideoPreviewRepresentable(videoPreviewManager: videoPreviewManager)
                     .frame(width: geometry.size.width, height: geometry.size.height)
                     .background(Color(red: 24/255, green: 25/255, blue: 38/255))
-                    .edgesIgnoringSafeArea(.all)
+                    .ignoresSafeArea()
+                    .id(videoPreviewManager.selectedVideoDevice) // Force update when device changes
                 
                 // Show the placeholder only if no device is selected
-                if videoManager.currentVideoDevice == nil {
+                if videoPreviewManager.currentVideoDevice == nil {
                     VStack {
                         Spacer()
                         Image(systemName: "video.slash")
@@ -428,7 +604,7 @@ struct VideoPreviewView: View {
                             .padding(.top, 10)
                         Spacer()
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .frame(maxWidth: CGFloat.infinity, maxHeight: CGFloat.infinity)
                     .background(Color(red: 0.1, green: 0.1, blue: 0.3))
                 }
                 
@@ -436,7 +612,7 @@ struct VideoPreviewView: View {
                 VStack {
                     HStack {
                         Spacer()
-                        if let selectedDevice = videoManager.currentVideoDevice {
+                        if let selectedDevice = videoPreviewManager.currentVideoDevice {
                             HStack {
                                 Image(systemName: "video.fill")
                                     .foregroundColor(.white)
@@ -486,8 +662,7 @@ class VideoManager: ObservableObject {
     @Published var outputResolution: String = "1080p"
     @Published var bitrate: Int = 5
     @Published var dynamicRange: DynamicRange = .sdr
-    @Published var outputURL: String = "rtmp://104.237.145.49:8890?streamid=publish"
-    @Published var isStreaming: Bool = false
+    @Published var hlsUploadURL: String = ""
     @Published var settingsTab: SettingsTab = .basic
     
     // Audio monitoring properties
@@ -530,9 +705,9 @@ class VideoManager: ObservableObject {
     func refreshDevices() {
         print("Refreshing devices...")
         
-        // Get video devices
+        // Get video devices - include more device types for capture cards
         let videoDiscoverySession = AVCaptureDevice.DiscoverySession(
-            deviceTypes: [.builtInWideAngleCamera, .externalUnknown, .deskViewCamera, .continuityCamera],
+            deviceTypes: [.builtInWideAngleCamera, .external, .deskViewCamera, .continuityCamera],
             mediaType: .video,
             position: .unspecified
         )
@@ -540,11 +715,23 @@ class VideoManager: ObservableObject {
         print("Found \(videoDevices.count) video devices")
         videoDevices.forEach { device in
             print("- Video device: \(device.localizedName) (ID: \(device.uniqueID))")
+            print("  - Device type: \(device.deviceType)")
+            print("  - Model ID: \(device.modelID)")
+            print("  - Manufacturer: \(device.manufacturer)")
+            
+            // Check supported formats
+            let formats = device.formats
+            print("  - Supported formats: \(formats.count)")
+            formats.prefix(3).forEach { format in
+                let desc = format.formatDescription
+                let dimensions = CMVideoFormatDescriptionGetDimensions(desc)
+                print("    - \(dimensions.width)x\(dimensions.height)")
+            }
         }
         
         // Get audio devices
         let audioDiscoverySession = AVCaptureDevice.DiscoverySession(
-            deviceTypes: [.builtInMicrophone, .externalUnknown],
+            deviceTypes: [.microphone, .external],
             mediaType: .audio,
             position: .unspecified
         )

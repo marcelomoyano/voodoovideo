@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Studio Producer</title>
+    <script>
+        // Check if user is logged in
+        const session = sessionStorage.getItem('voodoo_producer_session');
+        if (session) {
+            const data = JSON.parse(session);
+            if (data.userType === 'admin') {
+                window.location.href = 'admin.html';
+            } else {
+                window.location.href = 'producerhome.html';
+            }
+        } else {
+            window.location.href = 'login.html';
+        }
+    </script>
+</head>
+<body>
+    <p>Redirecting...</p>
+</body>
+</html>
