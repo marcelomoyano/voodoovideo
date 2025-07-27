@@ -2,8 +2,7 @@ import Foundation
 import CryptoKit
 
 class R2Uploader: NSObject {
-    private let accountId: String
-    private let bucketName: String
+    private let r2Endpoint: String
     private let accessKeyId: String
     private let secretAccessKey: String
     private let region: String = "auto"
@@ -15,9 +14,8 @@ class R2Uploader: NSObject {
     var onUploadComplete: ((String) -> Void)?
     var onUploadError: ((String, Error) -> Void)?
     
-    init(accountId: String, bucketName: String, accessKeyId: String, secretAccessKey: String) {
-        self.accountId = accountId
-        self.bucketName = bucketName
+    init(r2Endpoint: String, accessKeyId: String, secretAccessKey: String) {
+        self.r2Endpoint = r2Endpoint
         self.accessKeyId = accessKeyId
         self.secretAccessKey = secretAccessKey
         self.uploadQueue = DispatchQueue(label: "r2.upload.queue", qos: .utility)
@@ -29,16 +27,18 @@ class R2Uploader: NSObject {
         
         super.init()
         
-        print("📡 R2Uploader: Initialized for bucket: \(bucketName)")
+        print("📡 R2Uploader: Initialized for endpoint: \(r2Endpoint)")
     }
     
     // MARK: - Public Interface
     
     func uploadSegment(_ segmentURL: URL) {
         let filename = segmentURL.lastPathComponent
+        print("📁 R2Uploader: uploadSegment called for \(filename)")
         
         uploadQueue.async { [weak self] in
-            self?.performUpload(fileURL: segmentURL, key: filename, contentType: "video/mp2t")
+            print("📁 R2Uploader: On upload queue, calling performUpload")
+            self?.performUpload(fileURL: segmentURL, key: filename, contentType: "text/plain")
         }
     }
     
@@ -66,8 +66,13 @@ class R2Uploader: NSObject {
     // MARK: - Upload Implementation
     
     private func performUpload(fileURL: URL, key: String, contentType: String) {
+        print("🔍 R2Uploader: performUpload called for \(key)")
+        print("🔍 R2Uploader: File path: \(fileURL.path)")
+        print("🔍 R2Uploader: File exists: \(FileManager.default.fileExists(atPath: fileURL.path))")
+        
         guard FileManager.default.fileExists(atPath: fileURL.path) else {
             let error = R2Error.fileNotFound(key)
+            print("❌ R2Uploader: File not found: \(fileURL.path)")
             DispatchQueue.main.async {
                 self.onUploadError?(key, error)
             }
@@ -78,9 +83,8 @@ class R2Uploader: NSObject {
             // Get file data
             let fileData = try Data(contentsOf: fileURL)
             
-            // Create R2 endpoint URL
-            let r2Endpoint = "https://\(accountId).r2.cloudflarestorage.com"
-            guard let uploadURL = URL(string: "\(r2Endpoint)/\(bucketName)/\(key)") else {
+            // Create R2 upload URL
+            guard let uploadURL = URL(string: "\(r2Endpoint)/\(key)") else {
                 throw R2Error.invalidURL
             }
             
@@ -91,9 +95,13 @@ class R2Uploader: NSObject {
             request.setValue("\(fileData.count)", forHTTPHeaderField: "Content-Length")
             
             // Add AWS Signature V4 headers
+            print("🔐 R2Uploader: Signing request for \(key)...")
             let signedRequest = try signRequest(request, body: fileData)
+            print("✅ R2Uploader: Request signed successfully")
             
             print("📤 R2Uploader: Starting upload of \(key) (\(fileData.count) bytes)")
+            print("📤 R2Uploader: Upload URL: \(uploadURL)")
+            print("📤 R2Uploader: Authorization header: \(signedRequest.value(forHTTPHeaderField: "Authorization") ?? "none")")
             
             // Create upload task
             let uploadTask = session.uploadTask(with: signedRequest, from: fileData) { [weak self] data, response, error in
@@ -165,16 +173,59 @@ class R2Uploader: NSObject {
         let dateStamp = dateFormatter.string(from: now)
         
         // Add required headers
-        signedRequest.setValue("AWS4-HMAC-SHA256", forHTTPHeaderField: "Authorization")
         signedRequest.setValue(amzDate, forHTTPHeaderField: "X-Amz-Date")
-        signedRequest.setValue("\(accessKeyId)/\(dateStamp)/\(region)/s3/aws4_request", forHTTPHeaderField: "X-Amz-Credential")
+        signedRequest.setValue("UNSIGNED-PAYLOAD", forHTTPHeaderField: "X-Amz-Content-Sha256")
         
-        // For simplicity, using a basic signature approach
-        // In production, implement full AWS Signature V4 algorithm
-        let auth = "AWS4-HMAC-SHA256 Credential=\(accessKeyId)/\(dateStamp)/\(region)/s3/aws4_request, SignedHeaders=host;x-amz-date, Signature=dummy"
-        signedRequest.setValue(auth, forHTTPHeaderField: "Authorization")
+        guard let url = signedRequest.url else {
+            throw R2Error.invalidURL
+        }
+        
+        // Create canonical request
+        let httpMethod = signedRequest.httpMethod ?? "PUT"
+        let canonicalURI = url.path.isEmpty ? "/" : url.path
+        let canonicalQueryString = ""
+        let host = url.host ?? ""
+        
+        let canonicalHeaders = "host:\(host)\nx-amz-content-sha256:UNSIGNED-PAYLOAD\nx-amz-date:\(amzDate)\n"
+        let signedHeaders = "host;x-amz-content-sha256;x-amz-date"
+        let payloadHash = "UNSIGNED-PAYLOAD"
+        
+        let canonicalRequest = "\(httpMethod)\n\(canonicalURI)\n\(canonicalQueryString)\n\(canonicalHeaders)\n\(signedHeaders)\n\(payloadHash)"
+        
+        // Create string to sign
+        let algorithm = "AWS4-HMAC-SHA256"
+        let credentialScope = "\(dateStamp)/\(region)/s3/aws4_request"
+        let stringToSign = "\(algorithm)\n\(amzDate)\n\(credentialScope)\n\(sha256(canonicalRequest))"
+        
+        // Calculate signature
+        let signature = try calculateSignature(stringToSign: stringToSign, dateStamp: dateStamp)
+        
+        // Create authorization header
+        let authHeader = "\(algorithm) Credential=\(accessKeyId)/\(credentialScope), SignedHeaders=\(signedHeaders), Signature=\(signature)"
+        signedRequest.setValue(authHeader, forHTTPHeaderField: "Authorization")
         
         return signedRequest
+    }
+    
+    private func calculateSignature(stringToSign: String, dateStamp: String) throws -> String {
+        let kDate = try hmac(key: "AWS4\(secretAccessKey)".data(using: .utf8)!, data: dateStamp.data(using: .utf8)!)
+        let kRegion = try hmac(key: kDate, data: region.data(using: .utf8)!)
+        let kService = try hmac(key: kRegion, data: "s3".data(using: .utf8)!)
+        let kSigning = try hmac(key: kService, data: "aws4_request".data(using: .utf8)!)
+        let signature = try hmac(key: kSigning, data: stringToSign.data(using: .utf8)!)
+        
+        return signature.map { String(format: "%02x", $0) }.joined()
+    }
+    
+    private func hmac(key: Data, data: Data) throws -> Data {
+        let hmac = HMAC<SHA256>.authenticationCode(for: data, using: SymmetricKey(data: key))
+        return Data(hmac)
+    }
+    
+    private func sha256(_ string: String) -> String {
+        let data = string.data(using: .utf8)!
+        let digest = SHA256.hash(data: data)
+        return digest.map { String(format: "%02x", $0) }.joined()
     }
 }
 

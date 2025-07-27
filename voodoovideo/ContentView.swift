@@ -5,6 +5,7 @@ struct ContentView: View {
     @StateObject private var videoManager = VideoManager()
     @StateObject private var videoPreviewManager = VideoPreviewManager()
     @State private var isSidebarVisible = true
+    @State private var testR2Uploader: R2Uploader?
     
     var body: some View {
         VStack(spacing: 0) {
@@ -21,6 +22,38 @@ struct ContentView: View {
             ZStack(alignment: .leading) {
                 VideoPreviewView(videoManager: videoManager, videoPreviewManager: videoPreviewManager)
                     .frame(maxWidth: CGFloat.infinity, maxHeight: CGFloat.infinity)
+                    .onTapGesture {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            isSidebarVisible = false
+                        }
+                    }
+                
+                // Burger menu button when sidebar is hidden
+                if !isSidebarVisible {
+                    VStack {
+                        HStack {
+                            Button(action: {
+                                withAnimation(.easeInOut(duration: 0.25)) {
+                                    isSidebarVisible = true
+                                }
+                            }) {
+                                Image(systemName: "line.horizontal.3")
+                                    .font(.system(size: 20))
+                                    .foregroundColor(.white)
+                                    .padding(12)
+                                    .background(Color.black.opacity(0.6))
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                            .padding(.leading, 16)
+                            .padding(.top, 16)
+                            Spacer()
+                        }
+                        Spacer()
+                    }
+                    .transition(.opacity)
+                    .zIndex(2)
+                }
 
                 if isSidebarVisible {
                     VStack(spacing: 0) {
@@ -412,20 +445,87 @@ struct ContentView: View {
             }
             .padding(.horizontal, 10)
             
-            // HLS Upload URL Field
+            // R2 Upload Configuration
             VStack(alignment: .leading, spacing: 4) {
-                Text("HLS Upload URL (Optional)")
+                Text("R2 Upload (Optional)")
                     .font(.caption)
                     .foregroundColor(.gray)
                     .padding(.horizontal, 10)
                 
-                TextField("https://your-hls-endpoint.com/upload", text: $videoManager.hlsUploadURL)
+                TextField("R2 Access Key", text: $videoManager.r2AccessKey)
                     .textFieldStyle(PlainTextFieldStyle())
                     .padding(6)
                     .background(Color(red: 48/255, green: 50/255, blue: 68/255).opacity(0.8))
                     .cornerRadius(4)
                     .foregroundColor(.white)
                     .padding(.horizontal, 10)
+                
+                SecureField("R2 Secret Key", text: $videoManager.r2SecretKey)
+                    .textFieldStyle(PlainTextFieldStyle())
+                    .padding(6)
+                    .background(Color(red: 48/255, green: 50/255, blue: 68/255).opacity(0.8))
+                    .cornerRadius(4)
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 10)
+                    .padding(.top, 4)
+                
+                // R2 Upload Status Indicator
+                if !videoManager.r2AccessKey.isEmpty && !videoManager.r2SecretKey.isEmpty {
+                    HStack {
+                        Circle()
+                            .fill(Color.green)
+                            .frame(width: 6, height: 6)
+                        Text("R2 Upload Ready")
+                            .font(.caption)
+                            .foregroundColor(.green)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.top, 2)
+                }
+            }
+            
+            // R2 Test Button
+            Button(action: {
+                testR2Upload()
+            }) {
+                Text("Test R2 Upload")
+                    .foregroundColor(.white)
+                    .padding(.vertical, 6)
+                    .padding(.horizontal, 12)
+                    .background(Color.blue)
+                    .cornerRadius(4)
+            }
+            .buttonStyle(PlainButtonStyle())
+            .padding(.horizontal, 10)
+            .padding(.top, 4)
+            
+            // Upload Progress Display
+            if videoPreviewManager.isRecording && (!videoManager.r2AccessKey.isEmpty && !videoManager.r2SecretKey.isEmpty) {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text("Upload Progress")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                        
+                        Spacer()
+                        
+                        Text("\(Int(videoPreviewManager.overallUploadProgress * 100))%")
+                            .font(.caption)
+                            .foregroundColor(.white)
+                    }
+                    .padding(.horizontal, 10)
+                    
+                    ProgressView(value: videoPreviewManager.overallUploadProgress)
+                        .progressViewStyle(LinearProgressViewStyle(tint: .blue))
+                        .padding(.horizontal, 10)
+                    
+                    Text("\(videoPreviewManager.completedUploads.filter { !$0.contains(".m3u8") }.count)/\(videoPreviewManager.totalSegmentCount) segments uploaded")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                        .padding(.horizontal, 10)
+                }
+                .padding(.top, 4)
             }
             
             // Record Button
@@ -433,8 +533,17 @@ struct ContentView: View {
                 if videoPreviewManager.isRecording {
                     videoPreviewManager.stopRecording()
                 } else {
-                    let uploadEndpoint = videoManager.hlsUploadURL.isEmpty ? nil : videoManager.hlsUploadURL
-                    _ = videoPreviewManager.startRecording(uploadEndpoint: uploadEndpoint)
+                    let r2AccessKey = videoManager.r2AccessKey.isEmpty ? nil : videoManager.r2AccessKey
+                    let r2SecretKey = videoManager.r2SecretKey.isEmpty ? nil : videoManager.r2SecretKey
+                    _ = videoPreviewManager.startRecording(
+                        uploadEndpoint: nil,
+                        resolution: videoManager.outputResolution,
+                        frameRate: videoManager.selectedFrameRate,
+                        bitrate: videoManager.bitrate,
+                        dynamicRange: videoManager.dynamicRange,
+                        r2AccessKey: r2AccessKey,
+                        r2SecretKey: r2SecretKey
+                    )
                 }
             }) {
                 HStack {
@@ -457,11 +566,11 @@ struct ContentView: View {
             
             // Recording Info
             VStack(alignment: .leading, spacing: 4) {
-                Text("• Local: HEVC 1080p 30fps 10Mbps")
+                Text("• Local: HEVC \(videoManager.outputResolution) \(videoManager.selectedFrameRate)fps \(videoManager.bitrate)Mbps")
                     .font(.caption)
                     .foregroundColor(.gray)
                 
-                Text("• HLS: H.264 segments for upload")
+                Text("• HLS: H.264 segments for R2 upload")
                     .font(.caption)
                     .foregroundColor(.gray)
                 
@@ -574,6 +683,46 @@ struct ContentView: View {
             return String(format: "%02d:%02d", minutes, seconds)
         }
     }
+    
+    private func testR2Upload() {
+        print("🧪 ContentView: Testing R2 upload...")
+        
+        // Create test data
+        let testData = "Hello from VoodooVideo R2 test!".data(using: .utf8)!
+        let tempURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("r2_test.txt")
+        
+        do {
+            try testData.write(to: tempURL)
+            print("✅ R2 Test: Created test file at \(tempURL.path)")
+            
+            // Initialize R2 uploader with your credentials and store reference
+            testR2Uploader = R2Uploader(
+                r2Endpoint: "https://e561d71f6685e1ddd58b290d834f940e.r2.cloudflarestorage.com/vod",
+                accessKeyId: "e12d70affefd4d92da66c362013a6149",
+                secretAccessKey: "cf72cea58cc8e1dc37e6723fbb825451d7864d97857dd36c3b643bc3a50b5e24"
+            )
+            
+            testR2Uploader?.onUploadComplete = { filename in
+                print("✅ R2 Test: Successfully uploaded \(filename)")
+            }
+            
+            testR2Uploader?.onUploadError = { filename, error in
+                print("❌ R2 Test: Failed to upload \(filename) - \(error.localizedDescription)")
+            }
+            
+            testR2Uploader?.onUploadProgress = { filename, progress in
+                print("📤 R2 Test: Upload progress for \(filename): \(Int(progress * 100))%")
+            }
+            
+            // Start upload
+            print("🚀 R2 Test: Starting upload...")
+            testR2Uploader?.uploadSegment(tempURL)
+            print("📤 R2 Test: Upload request submitted")
+            
+        } catch {
+            print("❌ R2 Test: Failed to create test file - \(error)")
+        }
+    }
 }
 
 struct VideoPreviewView: View {
@@ -662,7 +811,8 @@ class VideoManager: ObservableObject {
     @Published var outputResolution: String = "1080p"
     @Published var bitrate: Int = 5
     @Published var dynamicRange: DynamicRange = .sdr
-    @Published var hlsUploadURL: String = ""
+    @Published var r2AccessKey: String = "e12d70affefd4d92da66c362013a6149"
+    @Published var r2SecretKey: String = "cf72cea58cc8e1dc37e6723fbb825451d7864d97857dd36c3b643bc3a50b5e24"
     @Published var settingsTab: SettingsTab = .basic
     
     // Audio monitoring properties

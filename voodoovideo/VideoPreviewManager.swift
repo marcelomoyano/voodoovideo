@@ -21,11 +21,18 @@ class VideoPreviewManager: NSObject, ObservableObject {
     // Recording components
     private let localRecorder = LocalRecorder()
     private let hlsSegmenter = HLSSegmenter()
-    private var hlsUploader: HLSUploader?
+    private var r2Uploader: R2Uploader?
     @Published var isRecording = false
     @Published var recordingDuration: TimeInterval = 0
     private var recordingTimer: Timer?
     private var recordingStartTime: Date?
+    
+    // Upload progress tracking
+    @Published var uploadProgress: [String: Double] = [:]
+    @Published var completedUploads: Set<String> = []
+    @Published var failedUploads: Set<String> = []
+    @Published var totalSegmentCount: Int = 0
+    @Published var overallUploadProgress: Double = 0.0
     
     // Audio monitoring properties
     private var audioMonitoringEnabled = false
@@ -512,7 +519,15 @@ class VideoPreviewManager: NSObject, ObservableObject {
     
     // MARK: - Recording Control
     
-    func startRecording(uploadEndpoint: String? = nil) -> Bool {
+    func startRecording(
+        uploadEndpoint: String? = nil,
+        resolution: String = "1080p",
+        frameRate: Int = 30,
+        bitrate: Int = 10,
+        dynamicRange: VideoManager.DynamicRange = .sdr,
+        r2AccessKey: String? = nil,
+        r2SecretKey: String? = nil
+    ) -> Bool {
         guard !isRecording else {
             print("❌ PreviewManager: Already recording")
             return false
@@ -523,17 +538,31 @@ class VideoPreviewManager: NSObject, ObservableObject {
         // Ensure clean state before starting new recording
         cleanupRecordingState()
         
-        // Setup HLS uploader if endpoint provided
-        if let endpoint = uploadEndpoint {
-            hlsUploader = HLSUploader(uploadEndpoint: endpoint)
-            setupHLSUploaderCallbacks()
+        // Setup R2 uploader if credentials provided
+        if let accessKey = r2AccessKey, let secretKey = r2SecretKey {
+            let r2Endpoint = "https://e561d71f6685e1ddd58b290d834f940e.r2.cloudflarestorage.com/vod"
+            r2Uploader = R2Uploader(
+                r2Endpoint: r2Endpoint,
+                accessKeyId: accessKey,
+                secretAccessKey: secretKey
+            )
+            setupR2UploaderCallbacks()
+            print("✅ PreviewManager: R2 uploader initialized for HLS streaming")
+            print("🔧 PreviewManager: R2 callbacks configured for progress tracking")
+        } else {
+            print("⚠️ PreviewManager: No R2 credentials provided, skipping R2 upload")
         }
         
         // Setup recording callbacks
         setupRecordingCallbacks()
         
-        // Start local recording
-        guard localRecorder.startRecording() else {
+        // Start local recording with settings
+        guard localRecorder.startRecording(
+            resolution: resolution,
+            frameRate: frameRate,
+            bitrate: bitrate,
+            dynamicRange: dynamicRange
+        ) else {
             print("❌ PreviewManager: Failed to start local recording")
             cleanupRecordingState()
             return false
@@ -585,8 +614,7 @@ class VideoPreviewManager: NSObject, ObservableObject {
         recordingStartTime = nil
         recordingDuration = 0
         
-        // Clean up uploader
-        hlsUploader = nil
+        // Clean up uploaders handled above
         
         print("✅ PreviewManager: Recording state cleanup completed")
     }
@@ -616,12 +644,21 @@ class VideoPreviewManager: NSObject, ObservableObject {
         
         hlsSegmenter.onSegmentReady = { [weak self] segmentURL in
             print("📺 PreviewManager: HLS segment ready: \(segmentURL.lastPathComponent)")
-            self?.hlsUploader?.uploadSegment(segmentURL)
+            print("🚀 PreviewManager: Starting R2 upload for segment: \(segmentURL.lastPathComponent)")
+            self?.r2Uploader?.uploadSegment(segmentURL)
+            
+            // Update total segment count for progress calculation
+            DispatchQueue.main.async {
+                self?.totalSegmentCount += 1
+                self?.updateOverallProgress()
+                print("📊 PreviewManager: Total segments now: \(self?.totalSegmentCount ?? 0)")
+            }
         }
         
         hlsSegmenter.onPlaylistUpdated = { [weak self] playlistURL in
             print("📺 PreviewManager: HLS playlist updated")
-            self?.hlsUploader?.uploadPlaylist(playlistURL)
+            self?.r2Uploader?.uploadPlaylist(playlistURL)
+            // Note: Don't count playlist in segment count for progress calculation
         }
         
         hlsSegmenter.onError = { error in
@@ -629,18 +666,48 @@ class VideoPreviewManager: NSObject, ObservableObject {
         }
     }
     
-    private func setupHLSUploaderCallbacks() {
-        hlsUploader?.onUploadProgress = { filename, progress in
+    private func setupR2UploaderCallbacks() {
+        r2Uploader?.onUploadProgress = { [weak self] filename, progress in
             print("📤 PreviewManager: Upload progress for \(filename): \(Int(progress * 100))%")
+            DispatchQueue.main.async {
+                self?.uploadProgress[filename] = progress
+                self?.updateOverallProgress()
+            }
         }
         
-        hlsUploader?.onUploadComplete = { filename in
+        r2Uploader?.onUploadComplete = { [weak self] filename in
             print("✅ PreviewManager: Upload complete for \(filename)")
+            DispatchQueue.main.async {
+                self?.completedUploads.insert(filename)
+                self?.uploadProgress[filename] = 1.0
+                self?.updateOverallProgress()
+            }
         }
         
-        hlsUploader?.onUploadError = { filename, error in
+        r2Uploader?.onUploadError = { [weak self] filename, error in
             print("❌ PreviewManager: Upload error for \(filename) - \(error.localizedDescription)")
+            DispatchQueue.main.async {
+                self?.failedUploads.insert(filename)
+                self?.uploadProgress[filename] = 0.0
+                self?.updateOverallProgress()
+            }
         }
+    }
+    
+    private func updateOverallProgress() {
+        guard totalSegmentCount > 0 else {
+            overallUploadProgress = 0.0
+            return
+        }
+        
+        // Only count segment uploads, not playlist uploads for progress calculation
+        let segmentProgress = uploadProgress.filter { !$0.key.contains(".m3u8") }
+        let segmentCompleted = completedUploads.filter { !$0.contains(".m3u8") }
+        
+        let totalProgress = segmentProgress.values.reduce(0.0, +)
+        overallUploadProgress = min(totalProgress / Double(totalSegmentCount), 1.0) // Cap at 100%
+        
+        print("📊 PreviewManager: Overall upload progress: \(Int(overallUploadProgress * 100))% (\(segmentCompleted.count)/\(totalSegmentCount) segments)")
     }
     
     deinit {

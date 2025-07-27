@@ -13,16 +13,8 @@ class LocalRecorder: NSObject {
     private var sessionStartTime: CMTime?
     private let sessionQueue = DispatchQueue(label: "recording.session", qos: .userInitiated)
     
-    // Recording settings
-    private let videoSettings: [String: Any] = [
-        AVVideoCodecKey: AVVideoCodecType.hevc,
-        AVVideoWidthKey: 1920,
-        AVVideoHeightKey: 1080,
-        AVVideoCompressionPropertiesKey: [
-            AVVideoAverageBitRateKey: 10_000_000, // 10 Mbps
-            AVVideoExpectedSourceFrameRateKey: 30
-        ]
-    ]
+    // Recording settings (will be configured dynamically)
+    private var videoSettings: [String: Any] = [:]
     
     private let audioSettings: [String: Any] = [
         AVFormatIDKey: kAudioFormatMPEG4AAC,
@@ -37,7 +29,12 @@ class LocalRecorder: NSObject {
     
     // MARK: - Public Interface
     
-    func startRecording() -> Bool {
+    func startRecording(
+        resolution: String = "1080p",
+        frameRate: Int = 30,
+        bitrate: Int = 10,
+        dynamicRange: VideoManager.DynamicRange = .sdr
+    ) -> Bool {
         print("🎬 LocalRecorder: startRecording() called")
         
         guard !isRecording else {
@@ -47,6 +44,9 @@ class LocalRecorder: NSObject {
         
         // Clean up any previous state
         cleanup()
+        
+        // Configure video settings based on parameters
+        configureVideoSettings(resolution: resolution, frameRate: frameRate, bitrate: bitrate, dynamicRange: dynamicRange)
         
         do {
             try setupRecording()
@@ -117,6 +117,46 @@ class LocalRecorder: NSObject {
     
     var recordingState: Bool {
         return isRecording
+    }
+    
+    // MARK: - Configuration
+    
+    private func configureVideoSettings(resolution: String, frameRate: Int, bitrate: Int, dynamicRange: VideoManager.DynamicRange) {
+        // Parse resolution
+        let (width, height): (Int, Int)
+        switch resolution {
+        case "1080p":
+            (width, height) = (1920, 1080)
+        case "720p":
+            (width, height) = (1280, 720)
+        case "480p":
+            (width, height) = (640, 480)
+        default:
+            (width, height) = (1920, 1080)
+        }
+        
+        // Calculate bitrate in bits per second
+        let bitrateInBps = bitrate * 1_000_000
+        
+        // Configure compression properties (SDR only for now - HEVC doesn't support AVVideoColorPropertiesKey)
+        let compressionProperties: [String: Any] = [
+            AVVideoAverageBitRateKey: bitrateInBps,
+            AVVideoExpectedSourceFrameRateKey: frameRate
+        ]
+        
+        // Note: HLG and PQ are not supported with HEVC codec
+        if dynamicRange != .sdr {
+            print("⚠️ LocalRecorder: HDR (HLG/PQ) not supported with HEVC codec, using SDR")
+        }
+        
+        videoSettings = [
+            AVVideoCodecKey: AVVideoCodecType.hevc,
+            AVVideoWidthKey: width,
+            AVVideoHeightKey: height,
+            AVVideoCompressionPropertiesKey: compressionProperties
+        ]
+        
+        print("✅ LocalRecorder: Configured video settings - \(width)x\(height) @ \(frameRate)fps, \(bitrate)Mbps, \(dynamicRange) (SDR only supported)")
     }
     
     // MARK: - Setup
