@@ -10,14 +10,20 @@ class R2Uploader: NSObject {
     private var uploadQueue: DispatchQueue
     private var uploadTasks: [String: URLSessionUploadTask] = [:]
     
+    // Room and participant info for folder structure
+    private var room: String?
+    private var participantId: String?
+    
     var onUploadProgress: ((String, Double) -> Void)?
     var onUploadComplete: ((String) -> Void)?
     var onUploadError: ((String, Error) -> Void)?
     
-    init(r2Endpoint: String, accessKeyId: String, secretAccessKey: String) {
+    init(r2Endpoint: String, accessKeyId: String, secretAccessKey: String, room: String? = nil, participantId: String? = nil) {
         self.r2Endpoint = r2Endpoint
         self.accessKeyId = accessKeyId
         self.secretAccessKey = secretAccessKey
+        self.room = room
+        self.participantId = participantId
         self.uploadQueue = DispatchQueue(label: "r2.upload.queue", qos: .utility)
         
         let config = URLSessionConfiguration.default
@@ -28,25 +34,38 @@ class R2Uploader: NSObject {
         super.init()
         
         print("📡 R2Uploader: Initialized for endpoint: \(r2Endpoint)")
+        if let room = room, let participantId = participantId {
+            print("📁 R2Uploader: Using folder structure: \(room)/\(participantId)/")
+        }
     }
     
     // MARK: - Public Interface
     
     func uploadSegment(_ segmentURL: URL) {
         let filename = segmentURL.lastPathComponent
-        print("📁 R2Uploader: uploadSegment called for \(filename)")
+        let key = buildKey(for: filename)
+        print("📁 R2Uploader: uploadSegment called for \(filename) -> \(key)")
         
         uploadQueue.async { [weak self] in
             print("📁 R2Uploader: On upload queue, calling performUpload")
-            self?.performUpload(fileURL: segmentURL, key: filename, contentType: "text/plain")
+            self?.performUpload(fileURL: segmentURL, key: key, contentType: "text/plain")
         }
     }
     
     func uploadPlaylist(_ playlistURL: URL) {
         let filename = playlistURL.lastPathComponent
+        let key = buildKey(for: filename)
         
         uploadQueue.async { [weak self] in
-            self?.performUpload(fileURL: playlistURL, key: filename, contentType: "application/vnd.apple.mpegurl")
+            self?.performUpload(fileURL: playlistURL, key: key, contentType: "application/vnd.apple.mpegurl")
+        }
+    }
+    
+    private func buildKey(for filename: String) -> String {
+        if let room = room, let participantId = participantId {
+            return "\(room)/\(participantId)/\(filename)"
+        } else {
+            return filename
         }
     }
     

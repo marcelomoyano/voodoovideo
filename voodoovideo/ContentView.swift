@@ -4,8 +4,11 @@ import AVFoundation
 struct ContentView: View {
     @StateObject private var videoManager = VideoManager()
     @StateObject private var videoPreviewManager = VideoPreviewManager()
+    @StateObject private var ablyManager = AblyManager()
     @State private var isSidebarVisible = true
     @State private var testR2Uploader: R2Uploader?
+    @State private var room: String = ""
+    @State private var participantId: String = ""
     
     var body: some View {
         VStack(spacing: 0) {
@@ -89,6 +92,17 @@ struct ContentView: View {
                         
                         ScrollView {
                             VStack(spacing: 0) {
+                                // Ably Connection Section
+                                Text("Remote Control")
+                                    .font(.headline)
+                                    .frame(maxWidth: CGFloat.infinity, alignment: .leading)
+                                    .padding(.horizontal, 10)
+                                    .padding(.top, 15)
+                                    .padding(.bottom, 5)
+                                    .foregroundColor(.white)
+
+                                ablyConnectionSection
+                                
                                 // Permissions Section
                                 Text("Permissions")
                                     .font(.headline)
@@ -168,6 +182,16 @@ struct ContentView: View {
         }
         .onReceive(videoManager.$audioMonitoringVolume) { volume in
             videoPreviewManager.setAudioMonitoringVolume(volume)
+        }
+        .onReceive(videoPreviewManager.$overallUploadProgress) { progress in
+            // Send upload progress via Ably
+            if ablyManager.isConnected {
+                ablyManager.sendRecordingProgress(
+                    completedUploads: videoPreviewManager.completedUploads.count,
+                    totalSegments: videoPreviewManager.totalSegmentCount,
+                    progress: progress
+                )
+            }
         }
         .onAppear {
             // Check permissions when the view appears
@@ -532,9 +556,19 @@ struct ContentView: View {
             Button(action: {
                 if videoPreviewManager.isRecording {
                     videoPreviewManager.stopRecording()
+                    // Update Ably status when manually stopping
+                    if ablyManager.isConnected {
+                        ablyManager.updateStreamStatus("stopped")
+                    }
                 } else {
                     let r2AccessKey = videoManager.r2AccessKey.isEmpty ? nil : videoManager.r2AccessKey
                     let r2SecretKey = videoManager.r2SecretKey.isEmpty ? nil : videoManager.r2SecretKey
+                    
+                    // Update Ably status when manually starting
+                    if ablyManager.isConnected {
+                        ablyManager.updateStreamStatus("recording")
+                    }
+                    
                     _ = videoPreviewManager.startRecording(
                         uploadEndpoint: nil,
                         resolution: videoManager.outputResolution,
@@ -542,7 +576,9 @@ struct ContentView: View {
                         bitrate: videoManager.bitrate,
                         dynamicRange: videoManager.dynamicRange,
                         r2AccessKey: r2AccessKey,
-                        r2SecretKey: r2SecretKey
+                        r2SecretKey: r2SecretKey,
+                        room: ablyManager.currentRoom,
+                        participantId: ablyManager.participantId
                     )
                 }
             }) {
@@ -699,7 +735,9 @@ struct ContentView: View {
             testR2Uploader = R2Uploader(
                 r2Endpoint: "https://e561d71f6685e1ddd58b290d834f940e.r2.cloudflarestorage.com/vod",
                 accessKeyId: "e12d70affefd4d92da66c362013a6149",
-                secretAccessKey: "cf72cea58cc8e1dc37e6723fbb825451d7864d97857dd36c3b643bc3a50b5e24"
+                secretAccessKey: "cf72cea58cc8e1dc37e6723fbb825451d7864d97857dd36c3b643bc3a50b5e24",
+                room: ablyManager.currentRoom ?? "test",
+                participantId: ablyManager.participantId ?? "test-recorder"
             )
             
             testR2Uploader?.onUploadComplete = { filename in
@@ -722,6 +760,136 @@ struct ContentView: View {
         } catch {
             print("❌ R2 Test: Failed to create test file - \(error)")
         }
+    }
+    
+    // Ably Connection Section
+    private var ablyConnectionSection: some View {
+        VStack(spacing: 8) {
+            // Connection Status
+            HStack {
+                Circle()
+                    .fill(ablyManager.isConnected ? Color.green : Color.red)
+                    .frame(width: 8, height: 8)
+                
+                Text(ablyManager.connectionStatus)
+                    .font(.caption)
+                    .foregroundColor(.gray)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.horizontal, 10)
+            
+            // Room Input
+            HStack {
+                Text("Room")
+                    .frame(width: 60, alignment: .leading)
+                    .foregroundColor(.white)
+                
+                TextField("Enter room name", text: $room)
+                    .textFieldStyle(PlainTextFieldStyle())
+                    .padding(6)
+                    .background(Color(red: 48/255, green: 50/255, blue: 68/255).opacity(0.8))
+                    .cornerRadius(4)
+                    .foregroundColor(.white)
+                    .disabled(ablyManager.isConnected)
+            }
+            .padding(.horizontal, 10)
+            
+            // Participant ID Input
+            HStack {
+                Text("ID")
+                    .frame(width: 60, alignment: .leading)
+                    .foregroundColor(.white)
+                
+                TextField("Enter your ID", text: $participantId)
+                    .textFieldStyle(PlainTextFieldStyle())
+                    .padding(6)
+                    .background(Color(red: 48/255, green: 50/255, blue: 68/255).opacity(0.8))
+                    .cornerRadius(4)
+                    .foregroundColor(.white)
+                    .disabled(ablyManager.isConnected)
+            }
+            .padding(.horizontal, 10)
+            
+            // Connect/Disconnect Button
+            Button(action: {
+                if ablyManager.isConnected {
+                    ablyManager.disconnect()
+                } else if !room.isEmpty && !participantId.isEmpty {
+                    connectToAbly()
+                }
+            }) {
+                Text(ablyManager.isConnected ? "Disconnect" : "Connect")
+                    .foregroundColor(.white)
+                    .padding(.vertical, 6)
+                    .padding(.horizontal, 12)
+                    .frame(maxWidth: .infinity)
+                    .background(ablyManager.isConnected ? Color.red : Color.blue)
+                    .cornerRadius(4)
+            }
+            .buttonStyle(PlainButtonStyle())
+            .padding(.horizontal, 10)
+            .disabled(!ablyManager.isConnected && (room.isEmpty || participantId.isEmpty))
+            .opacity((!ablyManager.isConnected && (room.isEmpty || participantId.isEmpty)) ? 0.5 : 1.0)
+            
+            // Current Room Display
+            if ablyManager.isConnected, let currentRoom = ablyManager.currentRoom {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Connected to: \(currentRoom)")
+                        .font(.caption)
+                        .foregroundColor(.green)
+                    Text("as: \(ablyManager.participantId ?? "")")
+                        .font(.caption)
+                        .foregroundColor(.green)
+                }
+                .padding(.horizontal, 10)
+                .padding(.top, 4)
+            }
+        }
+        .padding(.bottom, 8)
+    }
+    
+    private func connectToAbly() {
+        ablyManager.connect(to: room, as: participantId)
+        
+        // Set up callbacks
+        ablyManager.onStartRecording = {
+            if !videoPreviewManager.isRecording {
+                startRecordingWithAbly()
+            }
+        }
+        
+        ablyManager.onStopRecording = {
+            if videoPreviewManager.isRecording {
+                videoPreviewManager.stopRecording()
+            }
+        }
+        
+        ablyManager.onForceEndSession = { reason in
+            print("⚠️ Session ended by producer: \(reason)")
+            if videoPreviewManager.isRecording {
+                videoPreviewManager.stopRecording()
+            }
+        }
+    }
+    
+    private func startRecordingWithAbly() {
+        let r2AccessKey = videoManager.r2AccessKey.isEmpty ? nil : videoManager.r2AccessKey
+        let r2SecretKey = videoManager.r2SecretKey.isEmpty ? nil : videoManager.r2SecretKey
+        
+        // Update status to "recording" via Ably
+        ablyManager.updateStreamStatus("recording")
+        
+        _ = videoPreviewManager.startRecording(
+            uploadEndpoint: nil,
+            resolution: videoManager.outputResolution,
+            frameRate: videoManager.selectedFrameRate,
+            bitrate: videoManager.bitrate,
+            dynamicRange: videoManager.dynamicRange,
+            r2AccessKey: r2AccessKey,
+            r2SecretKey: r2SecretKey,
+            room: ablyManager.currentRoom,
+            participantId: ablyManager.participantId
+        )
     }
 }
 

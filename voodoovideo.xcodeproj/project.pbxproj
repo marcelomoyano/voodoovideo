@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		9CDE6AC42E38898000EAC62E /* Ably in Frameworks */ = {isa = PBXBuildFile; productRef = 9CDE6AC32E38898000EAC62E /* Ably */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		9C0FE3172DD468EB00119437 /* voodoovideo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = voodoovideo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -36,6 +40,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				9CDE6AC42E38898000EAC62E /* Ably in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -78,6 +83,7 @@
 			);
 			name = voodoovideo;
 			packageProductDependencies = (
+				9CDE6AC32E38898000EAC62E /* Ably */,
 			);
 			productName = voodoovideo;
 			productReference = 9C0FE3172DD468EB00119437 /* voodoovideo.app */;
@@ -107,6 +113,9 @@
 			);
 			mainGroup = 9C0FE30E2DD468EB00119437;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				9CDE6AC22E38898000EAC62E /* XCRemoteSwiftPackageReference "ably-cocoa" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 9C0FE3182DD468EB00119437 /* Products */;
 			projectDirPath = "";
@@ -350,6 +359,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		9CDE6AC22E38898000EAC62E /* XCRemoteSwiftPackageReference "ably-cocoa" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/ably/ably-cocoa.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.2.41;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		9CDE6AC32E38898000EAC62E /* Ably */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9CDE6AC22E38898000EAC62E /* XCRemoteSwiftPackageReference "ably-cocoa" */;
+			productName = Ably;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 9C0FE30F2DD468EB00119437 /* Project object */;
 }

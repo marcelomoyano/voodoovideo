@@ -526,7 +526,9 @@ class VideoPreviewManager: NSObject, ObservableObject {
         bitrate: Int = 10,
         dynamicRange: VideoManager.DynamicRange = .sdr,
         r2AccessKey: String? = nil,
-        r2SecretKey: String? = nil
+        r2SecretKey: String? = nil,
+        room: String? = nil,
+        participantId: String? = nil
     ) -> Bool {
         guard !isRecording else {
             print("❌ PreviewManager: Already recording")
@@ -544,7 +546,9 @@ class VideoPreviewManager: NSObject, ObservableObject {
             r2Uploader = R2Uploader(
                 r2Endpoint: r2Endpoint,
                 accessKeyId: accessKey,
-                secretAccessKey: secretKey
+                secretAccessKey: secretKey,
+                room: room,
+                participantId: participantId
             )
             setupR2UploaderCallbacks()
             print("✅ PreviewManager: R2 uploader initialized for HLS streaming")

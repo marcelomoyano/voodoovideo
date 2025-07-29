@@ -30,5 +30,7 @@
 	<string>Voodoo Video needs access to your camera to display and stream video.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Voodoo Video needs access to your microphone to capture and stream audio.</string>
+	<key>OS_ACTIVITY_MODE</key>
+	<string>disable</string>
 </dict>
 </plist> 
