@@ -576,9 +576,7 @@ struct ContentView: View {
                         bitrate: videoManager.bitrate,
                         dynamicRange: videoManager.dynamicRange,
                         r2AccessKey: r2AccessKey,
-                        r2SecretKey: r2SecretKey,
-                        room: ablyManager.currentRoom,
-                        participantId: ablyManager.participantId
+                        r2SecretKey: r2SecretKey
                     )
                 }
             }) {
@@ -886,9 +884,7 @@ struct ContentView: View {
             bitrate: videoManager.bitrate,
             dynamicRange: videoManager.dynamicRange,
             r2AccessKey: r2AccessKey,
-            r2SecretKey: r2SecretKey,
-            room: ablyManager.currentRoom,
-            participantId: ablyManager.participantId
+            r2SecretKey: r2SecretKey
         )
     }
 }
@@ -1076,3 +1072,4 @@ class VideoManager: ObservableObject {
     ContentView()
         .frame(width: 900, height: 600)
 }
+

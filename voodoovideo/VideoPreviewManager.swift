@@ -158,6 +158,17 @@ class VideoPreviewManager: NSObject, ObservableObject {
         
         // Create a new session to avoid conflicts
         let newSession = AVCaptureSession()
+        
+        // Remove outputs from current session before reusing them
+        if captureSession.outputs.contains(videoOutput) {
+            captureSession.removeOutput(videoOutput)
+            print("🔄 PreviewManager: Removed video output from old session")
+        }
+        if captureSession.outputs.contains(audioOutput) {
+            captureSession.removeOutput(audioOutput)
+            print("🔄 PreviewManager: Removed audio output from old session")
+        }
+        
         newSession.beginConfiguration()
         
         // Set a high-quality preset for capture cards
@@ -343,16 +354,26 @@ class VideoPreviewManager: NSObject, ObservableObject {
             }
         }
 
+        // Debug output connections
+        print("🔍 PreviewManager: Current video output connections: \(videoOutput.connections.count)")
+        print("🔍 PreviewManager: Current audio output connections: \(audioOutput.connections.count)")
+        print("🔍 PreviewManager: Video output connected input: \(String(describing: videoOutput.connections.first?.inputPorts.first?.input))")
+        print("🔍 PreviewManager: Audio output connected input: \(String(describing: audioOutput.connections.first?.inputPorts.first?.input))")
+        
         // Add video output
         if newSession.canAddOutput(videoOutput) {
             newSession.addOutput(videoOutput)
             print("✅ PreviewManager: Added video output to session")
+        } else {
+            print("❌ PreviewManager: Cannot add video output - it may already belong to another session")
         }
         
         // Add audio output
         if newSession.canAddOutput(audioOutput) {
             newSession.addOutput(audioOutput)
             print("✅ PreviewManager: Added audio output to session")
+        } else {
+            print("❌ PreviewManager: Cannot add audio output - it may already belong to another session")
         }
         
         // Add audio preview output for monitoring
@@ -526,9 +547,7 @@ class VideoPreviewManager: NSObject, ObservableObject {
         bitrate: Int = 10,
         dynamicRange: VideoManager.DynamicRange = .sdr,
         r2AccessKey: String? = nil,
-        r2SecretKey: String? = nil,
-        room: String? = nil,
-        participantId: String? = nil
+        r2SecretKey: String? = nil
     ) -> Bool {
         guard !isRecording else {
             print("❌ PreviewManager: Already recording")
@@ -546,9 +565,7 @@ class VideoPreviewManager: NSObject, ObservableObject {
             r2Uploader = R2Uploader(
                 r2Endpoint: r2Endpoint,
                 accessKeyId: accessKey,
-                secretAccessKey: secretKey,
-                room: room,
-                participantId: participantId
+                secretAccessKey: secretKey
             )
             setupR2UploaderCallbacks()
             print("✅ PreviewManager: R2 uploader initialized for HLS streaming")

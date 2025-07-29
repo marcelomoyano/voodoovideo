@@ -85,8 +85,18 @@ class HLSSegmenter: NSObject {
         // Start session if not started
         if !segmentSessionStarted {
             // Ensure writer is ready before starting session
-            guard let writer = segmentWriter, writer.status == .writing else {
-                print("❌ HLSSegmenter: Cannot start session - writer status is \(segmentWriter?.status.rawValue ?? -1)")
+            guard let writer = segmentWriter else {
+                print("❌ HLSSegmenter: No segment writer available")
+                return
+            }
+            
+            if writer.status == .failed {
+                print("❌ HLSSegmenter: Writer failed with error: \(writer.error?.localizedDescription ?? "Unknown error")")
+                return
+            }
+            
+            guard writer.status == .writing else {
+                print("❌ HLSSegmenter: Cannot start session - writer status is \(writer.status.rawValue)")
                 return
             }
             
@@ -121,8 +131,18 @@ class HLSSegmenter: NSObject {
         // Start session if not started
         if !segmentSessionStarted {
             // Ensure writer is ready before starting session
-            guard let writer = segmentWriter, writer.status == .writing else {
-                print("❌ HLSSegmenter: Cannot start session - writer status is \(segmentWriter?.status.rawValue ?? -1)")
+            guard let writer = segmentWriter else {
+                print("❌ HLSSegmenter: No segment writer available")
+                return
+            }
+            
+            if writer.status == .failed {
+                print("❌ HLSSegmenter: Writer failed with error: \(writer.error?.localizedDescription ?? "Unknown error")")
+                return
+            }
+            
+            guard writer.status == .writing else {
+                print("❌ HLSSegmenter: Cannot start session - writer status is \(writer.status.rawValue)")
                 return
             }
             
@@ -149,7 +169,7 @@ class HLSSegmenter: NSObject {
     // MARK: - Segment Management
     
     private func createNewSegment() {
-        let segmentFilename = String(format: "segment_%04d.ts", segmentIndex)
+        let segmentFilename = String(format: "segment_%04d.mp4", segmentIndex)
         currentSegmentURL = hlsDirectory.appendingPathComponent(segmentFilename)
         segmentSessionStarted = false // Reset session started flag for new segment
         
@@ -159,7 +179,7 @@ class HLSSegmenter: NSObject {
         }
         
         do {
-            // Create new segment writer
+            // Create new segment writer with MP4 file type
             segmentWriter = try AVAssetWriter(outputURL: segmentURL, fileType: .mp4)
             
             // Video settings for HLS (H.264 for compatibility)
