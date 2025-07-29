@@ -475,7 +475,7 @@ struct ContentView: View {
                     .foregroundColor(.gray)
                     .padding(.horizontal, 10)
                 
-                TextField("https://stream.voodoostudios.tv/room/participant/whip", text: $videoManager.whipEndpoint)
+                TextField("Auto-generated from Ably connection or enter manually", text: $videoManager.whipEndpoint)
                     .textFieldStyle(PlainTextFieldStyle())
                     .padding(6)
                     .background(Color(red: 48/255, green: 50/255, blue: 68/255).opacity(0.8))
@@ -1036,13 +1036,25 @@ struct ContentView: View {
     }
     
     private func startStreamingWithSettings() {
-        guard !videoManager.whipEndpoint.isEmpty else {
-            print("❌ ContentView: WHIP endpoint is required")
+        // Auto-generate WHIP endpoint from Ably connection if available
+        let whipEndpoint: String
+        if !videoManager.whipEndpoint.isEmpty {
+            // Use manually entered endpoint
+            whipEndpoint = videoManager.whipEndpoint
+        } else if ablyManager.isConnected, 
+                  let room = ablyManager.currentRoom, 
+                  let participantId = ablyManager.participantId {
+            // Auto-generate from Ably connection
+            whipEndpoint = "https://stream.voodoostudios.tv/\(room)/\(participantId)/whip"
+            videoManager.whipEndpoint = whipEndpoint // Update UI
+            print("🔧 ContentView: Auto-generated WHIP endpoint: \(whipEndpoint)")
+        } else {
+            print("❌ ContentView: No WHIP endpoint specified and no Ably connection available")
             return
         }
         
         let streamSettings = StreamSettings(
-            endpoint: videoManager.whipEndpoint,
+            endpoint: whipEndpoint,
             bitrate: videoManager.streamBitrate,
             frameRate: videoManager.selectedFrameRate,
             codec: videoManager.streamCodec,
@@ -1051,8 +1063,8 @@ struct ContentView: View {
         
         Task {
             do {
-                try await videoPreviewManager.startStreaming(endpoint: videoManager.whipEndpoint, settings: streamSettings)
-                print("✅ ContentView: WHIP streaming started successfully")
+                try await videoPreviewManager.startStreaming(endpoint: whipEndpoint, settings: streamSettings)
+                print("✅ ContentView: WHIP streaming started successfully to \(whipEndpoint)")
             } catch {
                 print("❌ ContentView: Failed to start WHIP streaming - \(error.localizedDescription)")
             }

@@ -15,21 +15,24 @@ class WHIPClient: NSObject {
     private var bitrateEnforcementTimer: Timer?
     private let updateStatusCallback: (String, Bool) -> Void
     
-    // WebRTC configuration
+    // WebRTC configuration optimized for WHIP streaming
     private let rtcConfiguration: RTCConfiguration = {
         let config = RTCConfiguration()
         config.iceServers = [
             RTCIceServer(urlStrings: ["stun:stun.l.google.com:19302"]),
+            RTCIceServer(urlStrings: ["stun:stun1.l.google.com:19302"]),
+            RTCIceServer(urlStrings: ["stun:stun2.l.google.com:19302"]),
             RTCIceServer(
                 urlStrings: ["turn:159.65.180.44:3478"],
                 username: "voodooturn",
                 credential: "vT_s7r0ngP@sswrd_4U"
             )
         ]
-        config.iceCandidatePoolSize = 10
-        config.bundlePolicy = .balanced  // Changed from .maxBundle to avoid SDP issues
+        config.iceCandidatePoolSize = 0  // Disable candidate pooling for WHIP
+        config.bundlePolicy = .maxCompatible  // Most compatible option
         config.rtcpMuxPolicy = .require
         config.sdpSemantics = .unifiedPlan
+        config.continualGatheringPolicy = .gatherOnce  // Gather ICE candidates once
         return config
     }()
     
@@ -359,10 +362,41 @@ extension WHIPClient: RTCPeerConnectionDelegate {
     }
     
     func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCIceConnectionState) {
-        updateStatusCallback("ICE connection state: \(newState)", false)
+        let stateDescription: String
+        switch newState {
+        case .new:
+            stateDescription = "new"
+        case .checking:
+            stateDescription = "checking"
+        case .connected:
+            stateDescription = "connected"
+        case .completed:
+            stateDescription = "completed"
+        case .failed:
+            stateDescription = "failed"
+        case .disconnected:
+            stateDescription = "disconnected"
+        case .closed:
+            stateDescription = "closed"
+        case .count:
+            stateDescription = "count"
+        @unknown default:
+            stateDescription = "unknown"
+        }
         
-        if newState == .failed {
-            updateStatusCallback("ICE connection failed", true)
+        print("🔗 WHIPClient: ICE connection state changed to: \(stateDescription)")
+        updateStatusCallback("ICE: \(stateDescription)", newState == .failed)
+        
+        if newState == .connected || newState == .completed {
+            updateStatusCallback("WHIP stream connected", false)
+        } else if newState == .failed {
+            updateStatusCallback("ICE connection failed - check network/TURN server", true)
+            print("❌ WHIPClient: ICE connection failed. Check:")
+            print("   - Network connectivity")
+            print("   - TURN server credentials")
+            print("   - Firewall settings")
+        } else if newState == .disconnected {
+            updateStatusCallback("ICE connection lost", true)
         }
     }
     
