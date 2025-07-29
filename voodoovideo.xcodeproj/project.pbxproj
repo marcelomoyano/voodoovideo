@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		9C8DFB772E39390C001F4CF1 /* WebRTC in Frameworks */ = {isa = PBXBuildFile; productRef = 9C8DFB762E39390C001F4CF1 /* WebRTC */; };
 		9CDE6AC42E38898000EAC62E /* Ably in Frameworks */ = {isa = PBXBuildFile; productRef = 9CDE6AC32E38898000EAC62E /* Ably */; };
 /* End PBXBuildFile section */
 
@@ -41,6 +42,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				9CDE6AC42E38898000EAC62E /* Ably in Frameworks */,
+				9C8DFB772E39390C001F4CF1 /* WebRTC in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -84,6 +86,7 @@
 			name = voodoovideo;
 			packageProductDependencies = (
 				9CDE6AC32E38898000EAC62E /* Ably */,
+				9C8DFB762E39390C001F4CF1 /* WebRTC */,
 			);
 			productName = voodoovideo;
 			productReference = 9C0FE3172DD468EB00119437 /* voodoovideo.app */;
@@ -115,6 +118,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				9CDE6AC22E38898000EAC62E /* XCRemoteSwiftPackageReference "ably-cocoa" */,
+				9C8DFB752E39390C001F4CF1 /* XCRemoteSwiftPackageReference "WebRTC" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 9C0FE3182DD468EB00119437 /* Products */;
@@ -361,6 +365,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		9C8DFB752E39390C001F4CF1 /* XCRemoteSwiftPackageReference "WebRTC" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/stasel/WebRTC";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 138.0.0;
+			};
+		};
 		9CDE6AC22E38898000EAC62E /* XCRemoteSwiftPackageReference "ably-cocoa" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/ably/ably-cocoa.git";
@@ -372,6 +384,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		9C8DFB762E39390C001F4CF1 /* WebRTC */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9C8DFB752E39390C001F4CF1 /* XCRemoteSwiftPackageReference "WebRTC" */;
+			productName = WebRTC;
+		};
 		9CDE6AC32E38898000EAC62E /* Ably */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 9CDE6AC22E38898000EAC62E /* XCRemoteSwiftPackageReference "ably-cocoa" */;

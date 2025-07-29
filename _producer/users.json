@@ -1,0 +1,131 @@
+{
+    "admin": {
+        "username": "admin",
+        "password": "severancevoodoo2025",
+        "userType": "admin"
+    },
+    "demo": {
+        "username": "demo",
+        "password": "demo123",
+        "room": "demo",
+        "isDemo": true,
+        "maxStreamers": 3,
+        "userType": "client"
+    },
+    "daria": {
+        "username": "daria",
+        "password": "1234",
+        "userType": "client",
+        "rooms": [
+            {
+                "name": "daria-room",
+                "maxStreamers": 5
+            }
+        ],
+        "expiresAt": null
+    },
+    "dolby": {
+        "username": "dolby",
+        "password": "voodoo$dolby2025",
+        "userType": "production",
+        "rooms": [
+            {
+                "name": "dolby-main",
+                "maxStreamers": 10
+            },
+            {
+                "name": "dolby-backup",
+                "maxStreamers": 5
+            }
+        ]
+    },
+    "11am": {
+        "username": "11am",
+        "password": "morning$stream11",
+        "userType": "production",
+        "rooms": [
+            {
+                "name": "11am-with-SeedClub",
+                "maxStreamers": 8
+            },
+            {
+                "name": "Greenroom",
+                "maxStreamers": 8
+            }
+        ]
+    },
+    "bankless": {
+        "username": "bankless",
+        "password": "crypto$bank2025",
+        "userType": "production",
+        "rooms": [
+            {
+                "name": "bankless/daily",
+                "maxStreamers": 6
+            },
+            {
+                "name": "bankless/events",
+                "maxStreamers": 12
+            },
+            {
+                "name": "bankless/interviews",
+                "maxStreamers": 4
+            },
+            {
+                "name": "bankless/control",
+                "maxStreamers": 3
+            }
+        ]
+    },
+    "taylor": {
+        "username": "taylor",
+        "password": "swift$voodoo25",
+        "userType": "production",
+        "rooms": [
+            {
+                "name": "taylor-mainstudio",
+                "maxStreamers": 15
+            },
+            {
+                "name": "taylor-stage",
+                "maxStreamers": 10
+            },
+            {
+                "name": "taylor-control",
+                "maxStreamers": 5
+            }
+        ]
+    },
+    "producer1": {
+        "username": "producer1",
+        "password": "prod123test",
+        "userType": "production",
+        "rooms": [
+            {
+                "name": "prod1-room1",
+                "maxStreamers": 5
+            },
+            {
+                "name": "prod1-room2", 
+                "maxStreamers": 3
+            }
+        ]
+    },
+    "rolluptv": {
+        "username": "rolluptv",
+        "password": "rollup2025",
+        "isDemo": true,
+        "userType": "client",
+        "rooms": [
+            {
+                "name": "rolluptv",
+                "maxStreamers": 10
+            },
+            {
+                "name": "rolluptv2", 
+                "maxStreamers": 10
+            }
+        ],
+        "expiresAt": null
+    }
+}

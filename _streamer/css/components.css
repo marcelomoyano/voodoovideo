@@ -1,0 +1,321 @@
+/* Components CSS - Specific UI components */
+
+/* Video Preview */
+#videoPreview {
+    width: 100%;
+    max-width: 100%;
+    aspect-ratio: 16/9;
+    height: auto;
+    background: var(--bg-color);
+    margin: 0;
+    border-radius: 8px;
+    display: block;
+    border: 1px solid var(--border-color);
+}
+
+/* Desktop video styling */
+@media (min-width: 768px) {
+    #videoPreview {
+        max-height: 400px;
+        object-fit: contain;
+        border-radius: 12px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+    
+    .video-container {
+        margin-bottom: 0;
+        text-align: center;
+    }
+}
+
+/* Mobile video styling */
+@media (max-width: 767px) {
+    #videoPreview {
+        max-height: 45vh;
+        object-fit: contain;
+        aspect-ratio: 16/9;
+    }
+}
+
+@media (max-width: 767px) and (orientation: portrait) {
+    #videoPreview {
+        aspect-ratio: 16/9; /* Keep 16:9 even on portrait for better UI */
+        max-height: 35vh;
+    }
+}
+
+/* Audio Meter Component */
+.audio-meter {
+    background: var(--bg-lighter);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 12px;
+    border: 1px solid var(--border-color);
+}
+
+.stereo-meters {
+    display: grid;
+    gap: 16px;
+    margin-bottom: 8px;
+}
+
+.meter-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-size: 14px;
+    color: var(--text-color);
+    opacity: 0.8;
+}
+
+.meter-container {
+    position: relative;
+    height: 24px;
+    background: var(--bg-color);
+    border-radius: 4px;
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+}
+
+.meter-bar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--accent-purple) 0%, #805AD5 100%);
+    transition: width 0.1s ease-out;
+}
+
+.meter-value {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-color);
+    text-shadow: 0 0 2px rgba(0,0,0,0.5);
+    z-index: 1;
+}
+
+.meter-scale {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    color: var(--text-color);
+    opacity: 0.6;
+    padding: 4px 0;
+}
+
+/* Audio Controls */
+.audio-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    flex-wrap: nowrap;
+}
+
+.monitor-toggle {
+    width: 48px;
+    height: 48px;
+    padding: 12px;
+    border-radius: 8px;
+    background: var(--bg-lighter);
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.monitor-toggle:hover {
+    transform: translateY(-1px);
+    border-color: var(--accent-blue);
+}
+
+.monitor-toggle.active {
+    background: var(--accent-blue);
+    border-color: var(--accent-blue);
+    color: #ffffff;
+}
+
+.volume-slider {
+    flex: 1;
+    height: 6px;
+    border-radius: 3px;
+    margin: 0 12px;
+    background: var(--border-color);
+    cursor: pointer;
+}
+
+.volume-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--accent-blue);
+    border: 3px solid var(--bg-lighter);
+    cursor: pointer;
+}
+
+.volume-slider::-moz-range-thumb {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--accent-blue);
+    border: 3px solid var(--bg-lighter);
+    cursor: pointer;
+}
+
+.volume-value {
+    min-width: 48px;
+    text-align: right;
+    font-size: 14px;
+    color: var(--text-color);
+    opacity: 0.8;
+}
+
+/* Toggle Switch Component */
+.studio-sound-toggle {
+    background: var(--bg-lighter);
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    margin-bottom: 8px;
+}
+
+.toggle-switch {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+    gap: 8px;
+    user-select: none;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+    position: absolute;
+}
+
+.toggle-slider {
+    position: relative;
+    display: inline-block;
+    width: 48px;
+    height: 24px;
+    background-color: var(--bg-color);
+    border-radius: 24px;
+    transition: .4s;
+    border: 1px solid var(--border-color);
+}
+
+.toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 2px;
+    bottom: 2px;
+    background-color: var(--text-color);
+    border-radius: 50%;
+    transition: .4s;
+}
+
+.toggle-switch input:checked + .toggle-slider {
+    background-color: var(--accent-blue);
+}
+
+.toggle-switch input:checked + .toggle-slider:before {
+    transform: translateX(24px);
+    background-color: white;
+}
+
+.toggle-description {
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--text-color);
+    opacity: 0.7;
+}
+
+/* Button Container */
+.button-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin: 8px 0;
+}
+
+/* Desktop button container */
+@media (min-width: 768px) {
+    .button-container {
+        gap: 16px;
+        margin: 16px 0;
+        max-width: 400px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+}
+
+.button-container button {
+    width: 100%;
+    min-height: 48px;
+    border-radius: 8px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+/* Start/Stop Buttons */
+#startButton {
+    background: var(--accent-blue);
+    color: white;
+    border: none;
+}
+
+#startButton:disabled {
+    background: var(--button-hover);
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+#startButton.active {
+    background: var(--accent-green);
+}
+
+#stopButton {
+    background: var(--accent-red);
+    color: white;
+    border: none;
+    opacity: 0.7;
+}
+
+#stopButton:disabled {
+    background: var(--button-hover);
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+#stopButton:not(:disabled) {
+    opacity: 1;
+}
+
+/* Status pulse animation for device changes */
+@keyframes statusPulse {
+    0% {
+        background-color: var(--bg-lighter);
+        transform: scale(1);
+    }
+    50% {
+        background-color: var(--accent-blue);
+        color: white;
+        transform: scale(1.02);
+    }
+    100% {
+        background-color: var(--bg-lighter);
+        transform: scale(1);
+    }
+}

@@ -1,0 +1,213 @@
+/* Mobile CSS - Mobile-specific styles and responsive adjustments */
+
+/* Mobile-specific meter adjustments */
+@media (max-width: 480px) {
+    .stereo-meters {
+        grid-template-columns: 1fr;
+    }
+
+    .meter-container {
+        height: 20px;
+    }
+
+    .meter-label {
+        font-size: 12px;
+    }
+
+    .meter-value {
+        font-size: 10px;
+    }
+
+    .meter-scale {
+        display: none;
+    }
+}
+
+/* Mobile layout optimization */
+@media (max-width: 767px) {
+    /* Mobile-first layout - video at top */
+    .container {
+        padding: 8px;
+        display: flex;
+        flex-direction: column;
+    }
+    
+    /* Initial prompt mobile styling */
+    #initial-prompt {
+        padding: 16px 8px;
+    }
+    
+    #initial-prompt .primary-button {
+        max-width: 100%;
+        margin: 16px 0;
+    }
+    
+    #main-content {
+        flex-direction: column;
+    }
+    
+    #main-content[style*="display: block"] {
+        display: flex !important;
+    }
+    
+    .logo-container {
+        order: 1;
+        padding: 8px 0;
+    }
+    
+    .video-section {
+        order: 2;
+        margin-bottom: 16px;
+    }
+    
+    .controls-section {
+        order: 3;
+        flex: 1;
+    }
+    
+    /* Video container optimization for mobile */
+    .video-container {
+        margin: 0 0 16px 0;
+        width: 100%;
+    }
+    
+    #videoPreview {
+        width: 100%;
+        height: auto;
+        max-height: 45vh;
+        object-fit: contain;
+        border-radius: 8px;
+    }
+}
+
+/* Touch-friendly adjustments */
+@media (max-width: 768px) {
+    /* Larger touch targets */
+    button {
+        min-height: 44px;
+    }
+
+    select, input {
+        min-height: 44px;
+    }
+
+    .monitor-toggle {
+        width: 44px;
+        height: 44px;
+    }
+
+    /* Adjust spacing for mobile */
+    .settings-group {
+        padding: 12px;
+        margin: 8px 0;
+    }
+
+    /* Stack controls vertically on small screens */
+    .audio-controls {
+        flex-wrap: wrap;
+    }
+
+    .volume-slider {
+        width: 100%;
+        margin: 8px 0;
+    }
+}
+
+/* Landscape mobile adjustments */
+@media (max-width: 768px) and (orientation: landscape) {
+    .video-container {
+        margin-bottom: 8px;
+    }
+
+    #videoPreview {
+        max-height: 40vh;
+    }
+
+    .container {
+        padding: 8px;
+    }
+
+    /* Reduce vertical spacing */
+    .settings-group {
+        margin: 8px 0;
+        padding: 8px;
+    }
+
+    .device-select {
+        margin: 8px 0;
+    }
+}
+
+/* iOS-specific adjustments */
+@supports (-webkit-touch-callout: none) {
+    /* iOS scroll bounce fix */
+    body {
+        position: fixed;
+        width: 100%;
+        height: 100vh;
+        overflow: hidden;
+    }
+
+    .container {
+        height: 100vh;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* Fix for iOS form zoom */
+    select, input {
+        font-size: 16px;
+    }
+}
+
+/* Small device optimizations */
+@media (max-width: 360px) {
+    .logo-container svg {
+        max-width: 140px;
+    }
+
+    .button-container {
+        grid-template-columns: 1fr;
+    }
+
+    .button-container button {
+        width: 100%;
+    }
+
+    /* Reduce font sizes */
+    body {
+        font-size: 14px;
+    }
+
+    label {
+        font-size: 14px;
+    }
+
+    .status {
+        font-size: 12px;
+    }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+    .meter-bar {
+        background: var(--accent-purple);
+    }
+
+    .monitor-toggle.active {
+        outline: 2px solid white;
+    }
+
+    button:focus {
+        outline: 2px solid var(--accent-blue);
+        outline-offset: 2px;
+    }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+    * {
+        transition: none !important;
+        animation: none !important;
+    }
+}

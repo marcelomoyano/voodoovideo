@@ -2,6 +2,7 @@ import AVFoundation
 import VideoToolbox
 import Cocoa
 import SwiftUI
+import Combine
 
 extension NSNotification.Name {
     static let captureSessionUpdated = NSNotification.Name("captureSessionUpdated")
@@ -26,6 +27,11 @@ class VideoPreviewManager: NSObject, ObservableObject {
     @Published var recordingDuration: TimeInterval = 0
     private var recordingTimer: Timer?
     private var recordingStartTime: Date?
+    
+    // WHIP streaming components
+    private let streamManager = StreamManager()
+    @Published var isStreaming = false
+    @Published var streamStatus = "Ready"
     
     // Upload progress tracking
     @Published var uploadProgress: [String: Double] = [:]
@@ -421,6 +427,9 @@ class VideoPreviewManager: NSObject, ObservableObject {
         captureSession.beginConfiguration()
         captureSession.commitConfiguration()
         
+        // Setup WHIP streaming observers
+        setupStreamingObservers()
+        
         // Check permissions first
         checkPermissions()
         
@@ -536,6 +545,74 @@ class VideoPreviewManager: NSObject, ObservableObject {
             isSessionRunning = false
             print("📹 PreviewManager: Preview session stopped")
         }
+    }
+    
+    // MARK: - WHIP Streaming Control
+    
+    private func setupStreamingObservers() {
+        // Observe streaming state changes
+        streamManager.$isStreaming
+            .receive(on: DispatchQueue.main)
+            .assign(to: &$isStreaming)
+            
+        streamManager.$streamStatus
+            .receive(on: DispatchQueue.main)
+            .assign(to: &$streamStatus)
+            
+        print("📡 PreviewManager: WHIP streaming observers setup")
+    }
+    
+    func startStreaming(endpoint: String, settings: StreamSettings) async throws -> Bool {
+        guard !isStreaming else {
+            print("❌ PreviewManager: Already streaming")
+            return false
+        }
+        
+        print("📡 PreviewManager: Starting WHIP streaming to: \(endpoint)")
+        
+        // Update stream manager settings
+        streamManager.updateSettings(
+            endpoint: endpoint,
+            bitrate: settings.bitrate,
+            frameRate: settings.frameRate,
+            codec: settings.codec,
+            resolution: settings.resolution
+        )
+        
+        do {
+            try await streamManager.startStreaming(endpoint: endpoint)
+            
+            // Notify that stream is live (similar to JavaScript version)
+            streamManager.notifyStreamLive()
+            
+            print("✅ PreviewManager: WHIP streaming started successfully")
+            return true
+        } catch {
+            print("❌ PreviewManager: Failed to start WHIP streaming - \(error.localizedDescription)")
+            throw error
+        }
+    }
+    
+    func stopStreaming() {
+        guard isStreaming else {
+            print("❌ PreviewManager: Not currently streaming")
+            return
+        }
+        
+        print("🛑 PreviewManager: Stopping WHIP streaming...")
+        streamManager.stopStreaming()
+        print("✅ PreviewManager: WHIP streaming stopped")
+    }
+    
+    func updateStreamingSettings(_ settings: StreamSettings) {
+        streamManager.updateSettings(
+            bitrate: settings.bitrate,
+            frameRate: settings.frameRate,
+            codec: settings.codec,
+            resolution: settings.resolution
+        )
+        
+        print("🔧 PreviewManager: Updated WHIP streaming settings")
     }
     
     // MARK: - Recording Control
@@ -735,6 +812,12 @@ class VideoPreviewManager: NSObject, ObservableObject {
         print("💀 PreviewManager: Deinitializing")
         stopRecording()
         cleanupRecordingState()
+        
+        // Stop streaming if active
+        if isStreaming {
+            stopStreaming()
+        }
+        
         if captureSession.isRunning {
             captureSession.stopRunning()
         }
@@ -745,20 +828,28 @@ class VideoPreviewManager: NSObject, ObservableObject {
 
 extension VideoPreviewManager: AVCaptureVideoDataOutputSampleBufferDelegate, AVCaptureAudioDataOutputSampleBufferDelegate {
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
-        // Only process samples if we're actively recording
-        guard isRecording else { return }
-        
         if output is AVCaptureVideoDataOutput {
-            // Ensure both recorders are in valid state before processing
-            if localRecorder.recordingState {
+            // Process for recording if active
+            if isRecording && localRecorder.recordingState {
                 localRecorder.processVideoSampleBuffer(sampleBuffer)
                 hlsSegmenter.processVideoSampleBuffer(sampleBuffer)
             }
+            
+            // Process for WHIP streaming if active
+            if isStreaming {
+                streamManager.processVideoSampleBuffer(sampleBuffer)
+            }
+            
         } else if output is AVCaptureAudioDataOutput {
-            // Ensure both recorders are in valid state before processing  
-            if localRecorder.recordingState {
+            // Process for recording if active
+            if isRecording && localRecorder.recordingState {
                 localRecorder.processAudioSampleBuffer(sampleBuffer)
                 hlsSegmenter.processAudioSampleBuffer(sampleBuffer)
+            }
+            
+            // Process for WHIP streaming if active
+            if isStreaming {
+                streamManager.processAudioSampleBuffer(sampleBuffer)
             }
         }
     }
@@ -780,6 +871,24 @@ extension AVAuthorizationStatus {
         @unknown default:
             return "Unknown"
         }
+    }
+}
+
+// MARK: - StreamSettings
+
+struct StreamSettings {
+    let endpoint: String
+    let bitrate: Int
+    let frameRate: Int
+    let codec: String
+    let resolution: String
+    
+    init(endpoint: String, bitrate: Int = 3000, frameRate: Int = 30, codec: String = "H264", resolution: String = "1080p") {
+        self.endpoint = endpoint
+        self.bitrate = bitrate
+        self.frameRate = frameRate
+        self.codec = codec
+        self.resolution = resolution
     }
 }
 

@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WHEP Stream Viewer</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lucide-static@0.321.0/font/lucide.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/lucide@0.321.0/dist/umd/lucide.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            max-width: 1280px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #1a1b26;
+            color: #a9b1d6;
+        }
+
+        .container {
+            background: #24283b;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+            border: 1px solid #292e42;
+        }
+
+        video {
+            width: 100%;
+            max-width: 1280px;
+            background: #1a1b26;
+            margin: 20px auto;
+            border-radius: 8px;
+            display: block;
+            border: 1px solid #292e42;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 8px 12px;
+            margin: 5px 0 15px;
+            background: #1a1b26;
+            border: 1px solid #292e42;
+            border-radius: 4px;
+            color: #a9b1d6;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+
+        button {
+            background: #7aa2f7;
+            color: #ffffff;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        button:hover {
+            background: #3b4261;
+            transform: translateY(-1px);
+        }
+
+        button:disabled {
+            background: #292e42;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .status {
+            margin-top: 10px;
+            padding: 10px;
+            border-left: 4px solid #7aa2f7;
+            background: #1a1b26;
+            font-size: 14px;
+        }
+
+        .error {
+            border-left-color: #f7768e;
+        }
+
+        .controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .volume-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-left: auto;
+        }
+
+        input[type="range"] {
+            width: 100px;
+        }
+
+        /* Audio Meter Styles */
+        .audio-meter {
+            margin: 15px 0;
+            padding: 15px;
+            background: #1a1b26;
+            border-radius: 4px;
+            border: 1px solid #292e42;
+        }
+
+        .stereo-meters {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .meter-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 4px;
+            font-size: 12px;
+            color: #a9b1d6;
+            opacity: 0.8;
+        }
+
+        .meter-container {
+            position: relative;
+            height: 16px;
+            background: #1a1b26;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 2px;
+        }
+
+        .meter-bar {
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 100%;
+            background: linear-gradient(to right, 
+                #9ece6a 0%, 
+                #9ece6a 70%, 
+                #e0af68 70%, 
+                #e0af68 85%,
+                #f7768e 85%
+            );
+            transition: width 0.1s ease;
+            border-radius: 4px;
+        }
+
+        .meter-value {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #a9b1d6;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            z-index: 1;
+        }
+
+        .meter-scale {
+            position: relative;
+            height: 16px;
+            margin-top: 4px;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 4px;
+            color: #a9b1d6;
+            font-size: 10px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div style="text-align: center; margin: 0 auto 20px auto;">
+            <svg width="220" height="55" viewBox="0 0 331 83" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <g clip-path="url(#clip0_1_3)">
+                    <path d="M144.647 28.9283L144.14 28.5155C141.004 25.541 136.845 23.8847 132.521 23.8889C129.301 23.8623 126.107 24.4752 123.125 25.6919C120.144 26.9087 117.433 28.705 115.152 30.9768C114.163 31.9978 113.259 33.097 112.448 34.2638C111.606 33.0538 110.659 31.9201 109.619 30.8756C107.347 28.5906 104.638 26.7857 101.654 25.568C98.6703 24.3504 95.4718 23.7449 92.249 23.7876C85.7279 23.7979 79.465 26.336 74.778 30.8678C73.9056 31.7735 73.1008 32.7419 72.3701 33.7653C71.621 32.7408 70.7979 31.7724 69.9076 30.8678C67.6356 28.5828 64.927 26.7779 61.9431 25.5602C58.9591 24.3426 55.7607 23.7371 52.5379 23.7798C51.4587 23.7909 50.3813 23.869 49.3117 24.0135L42.5711 40.6118C43.7127 39.0337 45.2096 37.7461 46.941 36.8531C48.6724 35.9601 50.5896 35.4867 52.5379 35.4711C55.0907 35.4092 57.6042 36.1089 59.7574 37.4811C61.9107 38.8532 63.6061 40.8355 64.6273 43.1749C65.6485 45.5143 65.9492 48.1048 65.4911 50.6159C65.0329 53.1269 63.8366 55.4445 62.0549 57.273C60.2732 59.1014 57.9868 60.3579 55.4876 60.8819C52.9884 61.4059 50.3897 61.1737 48.023 60.215C45.6564 59.2563 43.6292 57.6145 42.2001 55.4992C40.7711 53.3839 40.005 50.8909 39.9996 48.3385C40.0169 47.7356 40.0742 47.1346 40.171 46.5393L33.2278 63.6751C35.4771 66.6489 38.4004 69.0468 41.7573 70.6716C45.1142 72.2965 48.8089 73.102 52.5379 73.0219C55.7655 73.0302 58.9627 72.3984 61.9442 71.163C64.9258 69.9276 67.6325 68.1132 69.9076 65.8248C70.807 64.9187 71.6355 63.9448 72.3857 62.9117C73.1149 63.9368 73.9143 64.9101 74.778 65.8248C79.4569 70.3835 85.7153 72.9616 92.249 73.0219C95.4766 73.0302 98.6738 72.3984 101.655 71.163C104.637 69.9276 107.344 68.1132 109.619 65.8248C110.659 64.783 111.606 63.6519 112.448 62.4444C113.261 63.6072 114.165 64.7037 115.152 65.7236C119.781 70.2818 126.023 72.8291 132.521 72.8116C136.223 72.8116 140.439 72.2975 144.14 68.699L144.647 68.1927V71.8925H157.115V15.687H144.647V28.9283ZM92.249 61.1904C89.6993 61.2306 87.1953 60.5116 85.0556 59.1249C82.9159 57.7382 81.2374 55.7466 80.2337 53.4035C79.23 51.0603 78.9464 48.4717 79.4191 45.967C79.8918 43.4623 81.0994 41.1548 82.8882 39.3382C84.677 37.5217 86.966 36.2781 89.4641 35.7659C91.9621 35.2537 94.5561 35.4959 96.916 36.4618C99.2758 37.4277 101.295 39.0736 102.716 41.1899C104.137 43.3063 104.896 45.7974 104.896 48.3463C104.912 50.0199 104.597 51.6801 103.969 53.2317C103.341 54.7834 102.413 56.1959 101.238 57.3884C100.063 58.5809 98.6646 59.5298 97.122 60.1809C95.5794 60.832 93.9235 61.1724 92.249 61.1826V61.1904ZM132.521 60.7776C125.944 60.7776 120.388 55.1305 120.388 48.3152C120.388 41.4998 125.944 35.8528 132.521 35.8528C139.098 35.8528 144.647 41.601 144.647 48.3152C144.647 55.0293 139.098 60.7698 132.521 60.7698V60.7776Z" fill="#7aa2f7"/>
+                    <path d="M35.4722 15.687L20.3857 52.9574L13.2632 35.5646H0.000183105L14.7282 71.8691H26.0353L48.8365 15.687H35.4722Z" fill="#7aa2f7"/>
+                    <path d="M225.238 30.8678C222.965 28.5836 220.257 26.7791 217.273 25.5615C214.289 24.3439 211.091 23.738 207.868 23.7798C201.343 23.791 195.077 26.332 190.389 30.8678C189.945 31.3196 189.54 31.8025 189.135 32.2854C188.722 31.8025 188.309 31.3274 187.857 30.8678C185.583 28.5833 182.873 26.7788 179.888 25.5612C176.902 24.3436 173.703 23.7378 170.479 23.7798C167.081 23.7753 163.718 24.4672 160.598 25.8127V40.5262C161.743 38.9797 163.231 37.7202 164.946 36.847C166.66 35.9738 168.555 35.5108 170.479 35.4945C173.889 35.4945 177.16 36.8485 179.571 39.2587C181.982 41.6689 183.337 44.9378 183.337 48.3463C183.337 51.7548 181.982 55.0238 179.571 57.4339C177.16 59.8441 173.889 61.1982 170.479 61.1982C168.554 61.1822 166.659 60.7185 164.944 59.8438C163.229 58.9691 161.741 57.7075 160.598 56.1587V70.8877C163.71 72.2705 167.074 72.9945 170.479 73.0141C173.708 73.0217 176.906 72.3896 179.889 71.1543C182.871 69.919 185.58 68.1049 187.857 65.817C188.309 65.3653 188.729 64.8824 189.15 64.3994C189.548 64.8824 189.93 65.3653 190.389 65.817C195.071 70.3762 201.332 72.9542 207.868 73.0141C212.753 73.017 217.529 71.5689 221.589 68.8537C225.649 66.1385 228.81 62.2787 230.672 57.7642C232.533 53.2497 233.01 48.2843 232.043 43.4982C231.075 38.7122 228.707 34.3214 225.238 30.8834V30.8678ZM207.868 61.1826C205.318 61.2259 202.812 60.5095 200.671 59.1248C198.529 57.74 196.848 55.7495 195.842 53.4067C194.836 51.0639 194.55 48.4748 195.021 45.9691C195.492 43.4634 196.698 41.1545 198.486 39.3364C200.274 37.5182 202.563 36.2731 205.062 35.7596C207.56 35.246 210.155 35.4873 212.516 36.4527C214.876 37.4181 216.896 39.0639 218.318 41.1806C219.74 43.2973 220.5 45.789 220.5 48.3385C220.515 50.0112 220.201 51.6705 219.574 53.2216C218.947 54.7726 218.021 56.185 216.848 57.3779C215.675 58.5708 214.278 59.5208 212.737 60.1737C211.196 60.8265 209.542 61.1693 207.868 61.1826V61.1826Z" fill="#7aa2f7"/>
+                </g>
+                <path d="M244.721 68V25.7246H261.01C269.564 25.7246 275.395 31.3789 275.395 39.8457V39.9043C275.395 48.3418 269.564 54.0254 261.01 54.0254H252.279V68H244.721ZM259.135 31.9062H252.279V47.9316H259.135C264.555 47.9316 267.719 45.002 267.719 39.9336V39.875C267.719 34.8066 264.555 31.9062 259.135 31.9062ZM280.199 68V36.9453H287.494V42.3066H287.641C288.607 38.5566 291.186 36.3008 294.76 36.3008C295.668 36.3008 296.518 36.4473 297.074 36.5938V43.1855C296.459 42.9512 295.346 42.7754 294.115 42.7754C289.984 42.7754 287.494 45.3828 287.494 49.9824V68H280.199ZM313.393 68.6152C304.252 68.6152 298.363 62.5215 298.363 52.4727V52.4141C298.363 42.4531 304.34 36.3008 313.363 36.3008C322.416 36.3008 328.422 42.3945 328.422 52.4141V52.4727C328.422 62.5508 322.504 68.6152 313.393 68.6152ZM313.422 62.7266C318.021 62.7266 320.98 58.9766 320.98 52.4727V52.4141C320.98 45.9395 317.992 42.2188 313.363 42.2188C308.822 42.2188 305.805 45.9688 305.805 52.4141V52.4727C305.805 59.0059 308.764 62.7266 313.422 62.7266Z" fill="#7aa2f7"/>
+                <defs>
+                    <clipPath id="clip0_1_3">
+                        <rect width="232.532" height="72.9985" fill="white"/>
+                    </clipPath>
+                </defs>
+            </svg>
+        </div>
+        
+        <div>
+            <label for="whepEndpoint">WHEP Endpoint URL:</label>
+            <input type="text" id="whepEndpoint" 
+                   value="https://whep.test.streamvoodoo.com/play/test123"
+                   placeholder="Enter your WHEP endpoint URL">
+        </div>
+
+        <video id="videoPlayer" autoplay playsinline controls></video>
+
+        <div class="audio-meter">
+            <div class="stereo-meters">
+                <div>
+                    <div class="meter-label">
+                        <i data-lucide="waveform"></i>
+                        Left Channel
+                    </div>
+                    <div class="meter-container">
+                        <div id="meter-bar-left" class="meter-bar"></div>
+                        <div id="meter-value-left" class="meter-value">-Inf dB</div>
+                    </div>
+                </div>
+                <div>
+                    <div class="meter-label">
+                        <i data-lucide="waveform"></i>
+                        Right Channel
+                    </div>
+                    <div class="meter-container">
+                        <div id="meter-bar-right" class="meter-bar"></div>
+                        <div id="meter-value-right" class="meter-value">-Inf dB</div>
+                    </div>
+                </div>
+            </div>
+            <div class="meter-scale">
+                <span>-60</span>
+                <span>-50</span>
+                <span>-40</span>
+                <span>-30</span>
+                <span>-20</span>
+                <span>-15</span>
+                <span>-10</span>
+                <span>-5</span>
+                <span>0</span>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button onclick="startViewing()" id="startButton">Start Viewing</button>
+            <button onclick="stopViewing()" id="stopButton" disabled>Stop Viewing</button>
+            
+            <div class="volume-control">
+                <button onclick="toggleMute()" id="muteButton">VOL</button>
+                <input type="range" id="volumeSlider" min="0" max="100" value="100" 
+                       oninput="updateVolume(this.value)">
+                <span id="volumeValue">100%</span>
+            </div>
+        </div>
+
+        <div class="status" id="status"></div>
+    </div>
+
+    <script>
+        let whepClient = null;
+        let videoElement = document.getElementById('videoPlayer');
+        let audioContext = null;
+        let audioMeter = null;
+        let meterUpdateInterval = null;
+        
+        // Ensure video is not muted by default
+        videoElement.muted = false;
+
+        // Audio Meter Class
+        class AudioMeter {
+            constructor(audioContext, stream) {
+                this.audioContext = audioContext;
+                
+                // Create source from stream
+                this.source = audioContext.createMediaStreamSource(stream);
+                
+                // Create analyzer nodes
+                this.analyzerLeft = audioContext.createAnalyser();
+                this.analyzerRight = audioContext.createAnalyser();
+                
+                // Configure analyzers
+                [this.analyzerLeft, this.analyzerRight].forEach(analyzer => {
+                    analyzer.fftSize = 2048;
+                    analyzer.smoothingTimeConstant = 0.2;
+                    analyzer.minDecibels = -85;
+                    analyzer.maxDecibels = 0;
+                });
+
+                // Create channel splitter
+                this.splitter = audioContext.createChannelSplitter(2);
+                
+                // Connect the audio graph for metering
+                this.source.connect(this.splitter);
+                this.splitter.connect(this.analyzerLeft, 0);
+                this.splitter.connect(this.analyzerRight, 1);
+
+                // Create data arrays for analysis
+                this.dataArrayLeft = new Float32Array(this.analyzerLeft.frequencyBinCount);
+                this.dataArrayRight = new Float32Array(this.analyzerRight.frequencyBinCount);
+
+                console.log('AudioMeter initialized');
+            }
+
+            disconnect() {
+                try {
+                    if (this.source) {
+                        this.source.disconnect();
+                    }
+                    if (this.splitter) {
+                        this.splitter.disconnect();
+                    }
+                    if (this.analyzerLeft) {
+                        this.analyzerLeft.disconnect();
+                    }
+                    if (this.analyzerRight) {
+                        this.analyzerRight.disconnect();
+                    }
+                    console.log('AudioMeter disconnected');
+                } catch (error) {
+                    console.error('Error disconnecting AudioMeter:', error);
+                }
+            }
+
+            getLevel() {
+                this.analyzerLeft.getFloatTimeDomainData(this.dataArrayLeft);
+                this.analyzerRight.getFloatTimeDomainData(this.dataArrayRight);
+
+                const rmsLeft = this.calculateRMS(this.dataArrayLeft);
+                const rmsRight = this.calculateRMS(this.dataArrayRight);
+
+                const dbLeft = this.rmsToDb(rmsLeft);
+                const dbRight = this.rmsToDb(rmsRight);
+
+                return {
+                    left: {
+                        raw: (dbLeft + 85) / 85,
+                        db: dbLeft
+                    },
+                    right: {
+                        raw: (dbRight + 85) / 85,
+                        db: dbRight
+                    }
+                };
+            }
+
+            calculateRMS(array) {
+                let sum = 0;
+                for (let i = 0; i < array.length; i++) {
+                    sum += array[i] * array[i];
+                }
+                return Math.sqrt(sum / array.length);
+            }
+
+            rmsToDb(rms) {
+                const db = 20 * Math.log10(rms);
+                return Math.max(-85, Math.min(0, db));
+            }
+        }
+
+        async function setupAudioMeter(stream) {
+            try {
+                // Close existing audio context if it exists
+                if (audioContext) {
+                    await audioContext.close();
+                    audioContext = null;
+                }
+
+                // Create new audio context with stereo configuration
+                audioContext = new (window.AudioContext || window.webkitAudioContext)({
+                    sampleRate: 48000,
+                    latencyHint: 'interactive',
+                    channelCount: 2,
+                    channelCountMode: 'explicit',
+                    channelInterpretation: 'speakers'
+                });
+                
+                // Resume the audio context (needed for Chrome)
+                await audioContext.resume();
+                console.log('Audio context created and resumed with stereo configuration');
+
+                if (audioMeter) {
+                    audioMeter.disconnect();
+                    audioMeter = null;
+                }
+
+                // Create the audio meter
+                audioMeter = new AudioMeter(audioContext, stream);
+                
+                // Clear existing interval if any
+                if (meterUpdateInterval) {
+                    clearInterval(meterUpdateInterval);
+                }
+                
+                // Update meter 30 times per second
+                meterUpdateInterval = setInterval(updateAudioMeter, 33);
+                
+                console.log('Audio meter setup complete with stereo configuration');
+            } catch (error) {
+                console.error('Error setting up audio meter:', error);
+            }
+        }
+
+        function updateAudioMeter() {
+            if (!audioMeter) return;
+            
+            const levels = audioMeter.getLevel();
+            
+            // Update left channel
+            const meterBarLeft = document.getElementById('meter-bar-left');
+            const meterValueLeft = document.getElementById('meter-value-left');
+            const widthLeft = Math.min(100, levels.left.raw * 100);
+            meterBarLeft.style.width = `${widthLeft}%`;
+            meterValueLeft.textContent = `${levels.left.db.toFixed(1)} dB`;
+
+            // Update right channel
+            const meterBarRight = document.getElementById('meter-bar-right');
+            const meterValueRight = document.getElementById('meter-value-right');
+            const widthRight = Math.min(100, levels.right.raw * 100);
+            meterBarRight.style.width = `${widthRight}%`;
+            meterValueRight.textContent = `${levels.right.db.toFixed(1)} dB`;
+        }
+
+        class WHEPClient {
+            constructor(endpoint) {
+                if (!endpoint) {
+                    throw new Error('WHEP endpoint URL is required');
+                }
+                this.endpoint = endpoint;
+                this.peerConnection = new RTCPeerConnection({
+                    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+                    iceCandidatePoolSize: 10,
+                    bundlePolicy: 'max-bundle',
+                    rtcpMuxPolicy: 'require'
+                });
+
+                // Add connection state handlers
+                this.peerConnection.onconnectionstatechange = () => {
+                    updateStatus(`Connection state: ${this.peerConnection.connectionState}`);
+                };
+
+                this.peerConnection.oniceconnectionstatechange = () => {
+                    updateStatus(`ICE connection state: ${this.peerConnection.iceConnectionState}`);
+                    if (this.peerConnection.iceConnectionState === 'failed') {
+                        this.restartIce();
+                    }
+                };
+
+                // Configure audio transceiver for stereo
+                this.peerConnection.addTransceiver('audio', {
+                    direction: 'recvonly',
+                    streams: [],
+                    sendEncodings: [{
+                        stereo: true,
+                        channels: 2
+                    }]
+                });
+
+                // Add video transceiver
+                this.peerConnection.addTransceiver('video', {
+                    direction: 'recvonly'
+                });
+
+                // Handle incoming tracks
+                this.peerConnection.ontrack = (event) => {
+                    console.log('Received track:', event.track.kind);
+                    if (!videoElement.srcObject) {
+                        videoElement.srcObject = new MediaStream();
+                    }
+                    
+                    // Add the track to the media stream
+                    videoElement.srcObject.addTrack(event.track);
+                    
+                    // Log track information
+                    console.log(`Added ${event.track.kind} track to video element`);
+                    
+                    // If it's an audio track, set up metering immediately
+                    if (event.track.kind === 'audio') {
+                        // Ensure audio is enabled but muted initially
+                        videoElement.muted = true;
+                        updateStatus(`Audio track received. Click anywhere to enable audio playback.`);
+                        
+                        // Set up audio meter immediately
+                        const audioStream = new MediaStream([event.track]);
+                        setupAudioMeter(audioStream);
+                        
+                        // Update the mute button to show the muted state
+                        const muteButton = document.getElementById('muteButton');
+                        muteButton.textContent = 'MUTE';
+
+                        // Add click handler for unmuting
+                        const enableAudio = () => {
+                            videoElement.muted = false;
+                            muteButton.textContent = 'VOL';
+                            updateStatus('Audio playback enabled');
+                            // Remove the click handler once audio is enabled
+                            document.removeEventListener('click', enableAudio);
+                            document.removeEventListener('keydown', enableAudio);
+                        };
+
+                        // Add event listeners for enabling audio playback
+                        document.addEventListener('click', enableAudio);
+                        document.addEventListener('keydown', enableAudio);
+                    }
+                };
+            }
+
+            async restartIce() {
+                try {
+                    console.log('Attempting to restart ICE connection...');
+                    await this.peerConnection.restartIce();
+                    const offer = await this.peerConnection.createOffer({ iceRestart: true });
+                    await this.peerConnection.setLocalDescription(offer);
+                } catch (error) {
+                    console.error('Failed to restart ICE:', error);
+                }
+            }
+
+            async startViewing() {
+                try {
+                    // Create offer with specific constraints for iOS compatibility
+                    const offer = await this.peerConnection.createOffer({
+                        offerToReceiveAudio: true,
+                        offerToReceiveVideo: true
+                    });
+
+                    // Modify SDP to ensure stereo
+                    let modifiedSdp = offer.sdp;
+                    
+                    // Ensure stereo audio configuration
+                    modifiedSdp = modifiedSdp.replace(/(a=fmtp:\d+ .*?)(?=\r\n|$)/g, '$1;stereo=1;sprop-stereo=1');
+                    modifiedSdp = modifiedSdp.replace(/a=rtpmap:(\d+) opus\/48000\/2/g, 'a=rtpmap:$1 opus/48000/2\r\na=fmtp:$1 minptime=10;useinbandfec=1;stereo=1;sprop-stereo=1');
+
+                    // Set the modified SDP as local description
+                    await this.peerConnection.setLocalDescription({
+                        type: 'offer',
+                        sdp: modifiedSdp
+                    });
+                    
+                    // Wait for ICE gathering to complete
+                    await this.waitForIceGathering();
+                    
+                    // Send offer to WHEP endpoint
+                    const response = await fetch(this.endpoint, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/sdp',
+                        },
+                        body: this.peerConnection.localDescription.sdp
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`WHEP server error: ${response.status} ${response.statusText}`);
+                    }
+                    
+                    // Set remote description with answer from server
+                    const answer = await response.text();
+                    await this.peerConnection.setRemoteDescription({
+                        type: 'answer',
+                        sdp: answer
+                    });
+                    
+                    updateStatus('Stream viewing started');
+                } catch (error) {
+                    updateStatus(`Failed to start viewing: ${error.message}`, true);
+                    throw error;
+                }
+            }
+
+            async waitForIceGathering() {
+                if (this.peerConnection.iceGatheringState === 'complete') {
+                    return;
+                }
+
+                await new Promise((resolve) => {
+                    const checkState = () => {
+                        if (this.peerConnection.iceGatheringState === 'complete') {
+                            this.peerConnection.removeEventListener('icegatheringstatechange', checkState);
+                            resolve();
+                        }
+                    };
+                    this.peerConnection.addEventListener('icegatheringstatechange', checkState);
+                    setTimeout(resolve, 5000); // Timeout after 5 seconds
+                });
+            }
+
+            async stopViewing() {
+                if (this.peerConnection) {
+                    this.peerConnection.close();
+                    if (videoElement.srcObject) {
+                        videoElement.srcObject.getTracks().forEach(track => track.stop());
+                        videoElement.srcObject = null;
+                    }
+                }
+            }
+        }
+
+        async function startViewing() {
+            try {
+                const whepEndpoint = document.getElementById('whepEndpoint').value;
+                if (!whepEndpoint) {
+                    throw new Error('Please enter a WHEP endpoint URL');
+                }
+
+                document.getElementById('startButton').disabled = true;
+                document.getElementById('stopButton').disabled = false;
+                updateStatus('Starting stream view...');
+
+                if (whepClient) {
+                    await stopViewing();
+                }
+
+                // Ensure video element is not muted before starting
+                videoElement.muted = false;
+                
+                // Update UI to reflect unmuted state
+                const muteButton = document.getElementById('muteButton');
+                muteButton.textContent = 'VOL';
+
+                whepClient = new WHEPClient(whepEndpoint);
+                await whepClient.startViewing();
+
+                // Initialize volume control
+                const volumeValue = document.getElementById('volumeSlider').value;
+                updateVolume(volumeValue);
+                
+                // Add event listener to detect when tracks are added
+                videoElement.addEventListener('loadedmetadata', () => {
+                    console.log('Video metadata loaded');
+                    const audioTracks = videoElement.srcObject?.getAudioTracks() || [];
+                    console.log(`Audio tracks available: ${audioTracks.length}`);
+                    
+                    if (audioTracks.length > 0) {
+                        updateStatus(`Stream started with ${audioTracks.length} audio tracks`);
+                    }
+                });
+                
+                // Add a click handler to the video element to help with autoplay issues
+                videoElement.addEventListener('click', () => {
+                    if (videoElement.paused) {
+                        videoElement.play()
+                            .then(() => console.log('Playback started'))
+                            .catch(err => console.error('Playback failed:', err));
+                    }
+                });
+                
+                // Try to play the video (needed for some browsers)
+                videoElement.play()
+                    .then(() => console.log('Playback started automatically'))
+                    .catch(err => {
+                        console.warn('Autoplay failed:', err);
+                        updateStatus('Click the video to start playback (autoplay blocked by browser)');
+                    });
+                
+            } catch (error) {
+                updateStatus(`Viewing failed: ${error.message}`, true);
+                document.getElementById('startButton').disabled = false;
+                document.getElementById('stopButton').disabled = true;
+            }
+        }
+
+        async function stopViewing() {
+            try {
+                document.getElementById('startButton').disabled = false;
+                document.getElementById('stopButton').disabled = true;
+
+                if (whepClient) {
+                    await whepClient.stopViewing();
+                    whepClient = null;
+                }
+
+                updateStatus('Stream viewing stopped');
+            } catch (error) {
+                updateStatus(`Error stopping stream view: ${error.message}`, true);
+            }
+        }
+
+        function toggleMute() {
+            const button = document.getElementById('muteButton');
+            videoElement.muted = !videoElement.muted;
+            button.textContent = videoElement.muted ? 'MUTE' : 'VOL';
+        }
+
+        function updateVolume(value) {
+            videoElement.volume = value / 100;
+            document.getElementById('volumeValue').textContent = `${value}%`;
+        }
+
+        function updateStatus(message, isError = false) {
+            const statusElement = document.getElementById('status');
+            statusElement.textContent = message;
+            statusElement.className = 'status' + (isError ? ' error' : '');
+        }
+
+        function logSdp(sdp, label) {
+            console.log(`--- ${label} ---`);
+            console.log(sdp);
+            
+            // Check for BUNDLE group
+            const bundleMatch = sdp.match(/a=group:BUNDLE.*/g);
+            console.log(`BUNDLE groups: ${bundleMatch ? bundleMatch.join(', ') : 'None'}`);
+            
+            // Count media sections
+            const mediaLines = sdp.match(/m=\w+/g) || [];
+            console.log(`Media sections: ${mediaLines.length} (${mediaLines.join(', ')})`);
+        }
+
+        // Initialize Lucide icons with specific icons we need
+        lucide.createIcons({
+            icons: {
+                waveform: {
+                    name: 'waveform',
+                    path: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3-9 3 18 3-9 3 9h2"/></svg>'
+                }
+            }
+        });
+
+        // Auto-start viewing when page loads, but require interaction for audio
+        window.addEventListener('DOMContentLoaded', () => {
+            // Start viewing after a short delay to ensure everything is loaded
+            setTimeout(() => {
+                startViewing().then(() => {
+                    // Add click handler for autoplay
+                    const startPlayback = async () => {
+                        try {
+                            await videoElement.play();
+                            console.log('Playback started after user interaction');
+                            // Remove the event listeners once playback starts
+                            document.removeEventListener('click', startPlayback);
+                            document.removeEventListener('keydown', startPlayback);
+                        } catch (err) {
+                            console.error('Playback failed:', err);
+                        }
+                    };
+
+                    // Add event listeners for user interaction
+                    document.addEventListener('click', startPlayback);
+                    document.addEventListener('keydown', startPlayback);
+                    
+                    updateStatus('Click anywhere or press any key to start playback');
+                });
+            }, 500);
+        });
+    </script>
+</body>
+</html> 

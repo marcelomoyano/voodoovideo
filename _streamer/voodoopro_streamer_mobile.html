@@ -1,0 +1,2982 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>StreamVoodoo Mobile</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lucide-static@0.321.0/font/lucide.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/lucide@0.321.0/dist/umd/lucide.min.js"></script>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #1a1b26;
+            --bg-lighter: #24283b;
+            --text-color: #a9b1d6;
+            --accent-blue: #7aa2f7;
+            --accent-cyan: #7dcfff;
+            --accent-purple: #6B46C1;
+            --accent-green: #9ece6a;
+            --accent-red: #f7768e;
+            --border-color: #292e42;
+            --button-hover: #3b4261;
+            --safe-area-inset-top: env(safe-area-inset-top, 0px);
+            --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
+        }
+
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            font-size: 16px;
+            line-height: 1.5;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            padding-top: calc(16px + var(--safe-area-inset-top));
+            padding-bottom: calc(16px + var(--safe-area-inset-bottom));
+        }
+
+        .container {
+            background: var(--bg-color);
+            padding: 16px;
+            border-radius: 0;
+            min-height: 100vh;
+            max-width: 100%;
+            margin: 0;
+        }
+
+        label {
+            color: var(--text-color);
+            font-weight: 500;
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        select, input {
+            width: 100%;
+            padding: 12px;
+            margin: 4px 0;
+            background: var(--bg-lighter);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-color);
+            font-size: 16px;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+
+        select {
+            background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23a9b1d6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            padding-right: 36px;
+        }
+
+        button {
+            background: var(--accent-blue);
+            color: #ffffff;
+            border: none;
+            padding: 16px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 4px;
+            font-weight: 500;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            width: calc(50% - 8px);
+            min-height: 48px;
+        }
+
+        #startButton {
+            background: var(--accent-blue);
+        }
+
+        #startButton:disabled {
+            background: var(--button-hover);
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+
+        #startButton.active {
+            background: var(--accent-green);
+        }
+
+        #stopButton {
+            background: var(--accent-red);
+            opacity: 0.7;
+        }
+
+        #stopButton:disabled {
+            background: var(--button-hover);
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        #stopButton:not(:disabled) {
+            opacity: 1;
+        }
+
+        .settings-group {
+            background: var(--bg-lighter);
+            padding: 16px;
+            border-radius: 8px;
+            margin: 12px 0;
+            border: 1px solid var(--border-color);
+        }
+
+        .settings-row {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 12px;
+        }
+
+        .status {
+            margin: 8px 0;
+            padding: 8px;
+            border-radius: 8px;
+            font-size: 14px;
+            background: var(--bg-lighter);
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+            text-align: center;
+        }
+
+        .status.error {
+            background: rgba(247, 118, 142, 0.2);
+            border-color: var(--accent-red);
+            color: var(--accent-red);
+        }
+
+        .device-select {
+            margin: 12px 0;
+            width: 100%;
+        }
+
+        .monitor-toggle {
+            width: 48px;
+            height: 48px;
+            padding: 12px;
+            border-radius: 8px;
+            background: var(--bg-lighter);
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+        }
+
+        .monitor-toggle.active {
+            background: var(--accent-blue);
+            border-color: var(--accent-blue);
+            color: #ffffff;
+        }
+
+        .volume-slider {
+            height: 6px;
+            border-radius: 3px;
+            margin: 0 12px;
+            background: var(--border-color);
+        }
+
+        .volume-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: var(--accent-blue);
+            border: 3px solid var(--bg-lighter);
+            cursor: pointer;
+        }
+
+        @media (min-width: 480px) {
+            .settings-row {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        .audio-meter {
+            background: white;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 24px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .stereo-meters {
+            display: grid;
+            gap: 16px;
+            margin-bottom: 8px;
+        }
+
+        .meter-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+            font-size: 14px;
+            color: #4a5568;
+        }
+
+        .meter-container {
+            position: relative;
+            height: 24px;
+            background: #edf2f7;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .meter-bar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, var(--accent-purple) 0%, #805AD5 100%);
+            transition: width 0.1s ease-out;
+        }
+
+        .meter-value {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 12px;
+            font-weight: 500;
+            color: #2d3748;
+            text-shadow: 0 0 2px rgba(255,255,255,0.8);
+        }
+
+        .meter-scale {
+            display: flex;
+            justify-content: space-between;
+            font-size: 10px;
+            color: #718096;
+            padding: 4px 0;
+        }
+
+        @media (max-width: 480px) {
+            .stereo-meters {
+                grid-template-columns: 1fr;
+            }
+
+            .meter-container {
+                height: 20px;
+            }
+
+            .meter-label {
+                font-size: 12px;
+            }
+
+            .meter-value {
+                font-size: 10px;
+            }
+
+            .meter-scale {
+                display: none;
+            }
+        }
+
+        #videoPreview {
+            width: 100%;
+            max-width: 100%;
+            aspect-ratio: 16/9;
+            height: auto;
+            background: var(--bg-color);
+            margin: 16px 0;
+            border-radius: 8px;
+            display: block;
+            border: 1px solid var(--border-color);
+        }
+
+        @media (orientation: portrait) {
+            #videoPreview {
+                aspect-ratio: 9/16;
+            }
+        }
+
+        .logo-container {
+            padding: 16px 0;
+        }
+
+        .logo-container svg {
+            max-width: 180px;
+            height: auto;
+        }
+
+        #initial-prompt {
+            padding: 24px 16px;
+        }
+
+        #loadDevicesButton {
+            width: 100%;
+            max-width: 280px;
+            margin: 16px auto;
+            display: block;
+        }
+
+        .audio-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 12px;
+            flex-wrap: nowrap;
+        }
+
+        .studio-sound-toggle {
+            margin-top: 16px;
+            padding: 12px;
+            background: var(--bg-lighter);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+        }
+
+        .toggle-switch {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            cursor: pointer;
+            gap: 8px;
+            user-select: none;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+            position: absolute;
+        }
+
+        .toggle-slider {
+            position: relative;
+            display: inline-block;
+            width: 48px;
+            height: 24px;
+            background-color: var(--bg-color);
+            border-radius: 24px;
+            transition: .4s;
+            border: 1px solid var(--border-color);
+        }
+
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 2px;
+            bottom: 2px;
+            background-color: var(--text-color);
+            border-radius: 50%;
+            transition: .4s;
+        }
+
+        .toggle-switch input:checked + .toggle-slider {
+            background-color: var(--accent-blue);
+        }
+
+        .toggle-switch input:checked + .toggle-slider:before {
+            transform: translateX(24px);
+            background-color: white;
+        }
+
+        .toggle-description {
+            margin-top: 8px;
+            font-size: 12px;
+            color: var(--text-color);
+            opacity: 0.7;
+        }
+
+        .video-container {
+            margin-bottom: 16px;
+            position: relative;
+        }
+
+        #videoPreview {
+            width: 100%;
+            max-width: 100%;
+            aspect-ratio: 16/9;
+            height: auto;
+            background: var(--bg-color);
+            border-radius: 8px;
+            display: block;
+            border: 1px solid var(--border-color);
+        }
+
+        .controls-container {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .settings-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+        }
+
+        .audio-meter {
+            background: var(--bg-lighter);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 12px;
+            border: 1px solid var(--border-color);
+        }
+
+        .settings-group {
+            background: var(--bg-lighter);
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+
+        .device-select {
+            margin-bottom: 8px;
+        }
+
+                .button-container {            display: grid;            grid-template-columns: 1fr 1fr;            gap: 8px;            margin: 8px 0;        }        .button-container button {            width: 100%;            min-height: 48px;            border-radius: 8px;            font-weight: 500;            cursor: pointer;            transition: all 0.3s ease;        }        #startButton {            background: var(--accent-blue);            color: white;            border: none;        }        #startButton:disabled {            background: var(--button-hover);            opacity: 0.7;            cursor: not-allowed;        }        #stopButton {            background: var(--accent-red);            color: white;            border: none;            opacity: 0.7;        }        #stopButton:disabled {            background: var(--button-hover);            opacity: 0.5;            cursor: not-allowed;        }        #stopButton:not(:disabled) {            opacity: 1;        }
+
+        .studio-sound-toggle {
+            background: var(--bg-lighter);
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            margin-bottom: 8px;
+        }
+
+        /* Adjust spacing for more compact layout */
+        label {
+            margin-bottom: 4px;
+        }
+
+        select, input {
+            margin: 2px 0;
+        }
+
+        .audio-controls {
+            margin-top: 8px;
+        }
+
+        /* Make meters more compact */
+        .stereo-meters {
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+
+        .meter-container {
+            height: 20px;
+        }
+
+        .meter-label {
+            margin-bottom: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div id="initial-prompt" style="text-align: center; padding: 20px;">
+            <div style="text-align: center; margin: 0 auto 20px auto;">
+                <svg width="220" height="55" viewBox="0 0 331 83" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <g clip-path="url(#clip0_1_3)">
+                        <path d="M144.647 28.9283L144.14 28.5155C141.004 25.541 136.845 23.8847 132.521 23.8889C129.301 23.8623 126.107 24.4752 123.125 25.6919C120.144 26.9087 117.433 28.705 115.152 30.9768C114.163 31.9978 113.259 33.097 112.448 34.2638C111.606 33.0538 110.659 31.9201 109.619 30.8756C107.347 28.5906 104.638 26.7857 101.654 25.568C98.6703 24.3504 95.4718 23.7449 92.249 23.7876C85.7279 23.7979 79.465 26.336 74.778 30.8678C73.9056 31.7735 73.1008 32.7419 72.3701 33.7653C71.621 32.7408 70.7979 31.7724 69.9076 30.8678C67.6356 28.5828 64.927 26.7779 61.9431 25.5602C58.9591 24.3426 55.7607 23.7371 52.5379 23.7798C51.4587 23.7909 50.3813 23.869 49.3117 24.0135L42.5711 40.6118C43.7127 39.0337 45.2096 37.7461 46.941 36.8531C48.6724 35.9601 50.5896 35.4867 52.5379 35.4711C55.0907 35.4092 57.6042 36.1089 59.7574 37.4811C61.9107 38.8532 63.6061 40.8355 64.6273 43.1749C65.6485 45.5143 65.9492 48.1048 65.4911 50.6159C65.0329 53.1269 63.8366 55.4445 62.0549 57.273C60.2732 59.1014 57.9868 60.3579 55.4876 60.8819C52.9884 61.4059 50.3897 61.1737 48.023 60.215C45.6564 59.2563 43.6292 57.6145 42.2001 55.4992C40.7711 53.3839 40.005 50.8909 39.9996 48.3385C40.0169 47.7356 40.0742 47.1346 40.171 46.5393L33.2278 63.6751C35.4771 66.6489 38.4004 69.0468 41.7573 70.6716C45.1142 72.2965 48.8089 73.102 52.5379 73.0219C55.7655 73.0302 58.9627 72.3984 61.9442 71.163C64.9258 69.9276 67.6325 68.1132 69.9076 65.8248C70.807 64.9187 71.6355 63.9448 72.3857 62.9117C73.1149 63.9368 73.9143 64.9101 74.778 65.8248C79.4569 70.3835 85.7153 72.9616 92.249 73.0219C95.4766 73.0302 98.6738 72.3984 101.655 71.163C104.637 69.9276 107.344 68.1132 109.619 65.8248C110.659 64.783 111.606 63.6519 112.448 62.4444C113.261 63.6072 114.165 64.7037 115.152 65.7236C119.781 70.2818 126.023 72.8291 132.521 72.8116C136.223 72.8116 140.439 72.2975 144.14 68.699L144.647 68.1927V71.8925H157.115V15.687H144.647V28.9283ZM92.249 61.1904C89.6993 61.2306 87.1953 60.5116 85.0556 59.1249C82.9159 57.7382 81.2374 55.7466 80.2337 53.4035C79.23 51.0603 78.9464 48.4717 79.4191 45.967C79.8918 43.4623 81.0994 41.1548 82.8882 39.3382C84.677 37.5217 86.966 36.2781 89.4641 35.7659C91.9621 35.2537 94.5561 35.4959 96.916 36.4618C99.2758 37.4277 101.295 39.0736 102.716 41.1899C104.137 43.3063 104.896 45.7974 104.896 48.3463C104.912 50.0199 104.597 51.6801 103.969 53.2317C103.341 54.7834 102.413 56.1959 101.238 57.3884C100.063 58.5809 98.6646 59.5298 97.122 60.1809C95.5794 60.832 93.9235 61.1724 92.249 61.1826V61.1904ZM132.521 60.7776C125.944 60.7776 120.388 55.1305 120.388 48.3152C120.388 41.4998 125.944 35.8528 132.521 35.8528C139.098 35.8528 144.647 41.601 144.647 48.3152C144.647 55.0293 139.098 60.7698 132.521 60.7698V60.7776Z" fill="var(--accent-purple)"/>
+                        <path d="M35.4722 15.687L20.3857 52.9574L13.2632 35.5646H0.000183105L14.7282 71.8691H26.0353L48.8365 15.687H35.4722Z" fill="var(--accent-purple)"/>
+                        <path d="M225.238 30.8678C222.965 28.5836 220.257 26.7791 217.273 25.5615C214.289 24.3439 211.091 23.738 207.868 23.7798C201.343 23.791 195.077 26.332 190.389 30.8678C189.945 31.3196 189.54 31.8025 189.135 32.2854C188.722 31.8025 188.309 31.3274 187.857 30.8678C185.583 28.5833 182.873 26.7788 179.888 25.5612C176.902 24.3436 173.703 23.7378 170.479 23.7798C167.081 23.7753 163.718 24.4672 160.598 25.8127V40.5262C161.743 38.9797 163.231 37.7202 164.946 36.847C166.66 35.9738 168.555 35.5108 170.479 35.4945C173.889 35.4945 177.16 36.8485 179.571 39.2587C181.982 41.6689 183.337 44.9378 183.337 48.3463C183.337 51.7548 181.982 55.0238 179.571 57.4339C177.16 59.8441 173.889 61.1982 170.479 61.1982C168.554 61.1822 166.659 60.7185 164.944 59.8438C163.229 58.9691 161.741 57.7075 160.598 56.1587V70.8877C163.71 72.2705 167.074 72.9945 170.479 73.0141C173.708 73.0217 176.906 72.3896 179.889 71.1543C182.871 69.919 185.58 68.1049 187.857 65.817C188.309 65.3653 188.729 64.8824 189.15 64.3994C189.548 64.8824 189.93 65.3653 190.389 65.817C195.071 70.3762 201.332 72.9542 207.868 73.0141C212.753 73.017 217.529 71.5689 221.589 68.8537C225.649 66.1385 228.81 62.2787 230.672 57.7642C232.533 53.2497 233.01 48.2843 232.043 43.4982C231.075 38.7122 228.707 34.3214 225.238 30.8834V30.8678ZM207.868 61.1826C205.318 61.2259 202.812 60.5095 200.671 59.1248C198.529 57.74 196.848 55.7495 195.842 53.4067C194.836 51.0639 194.55 48.4748 195.021 45.9691C195.492 43.4634 196.698 41.1545 198.486 39.3364C200.274 37.5182 202.563 36.2731 205.062 35.7596C207.56 35.246 210.155 35.4873 212.516 36.4527C214.876 37.4181 216.896 39.0639 218.318 41.1806C219.74 43.2973 220.5 45.789 220.5 48.3385C220.515 50.0112 220.201 51.6705 219.574 53.2216C218.947 54.7726 218.021 56.185 216.848 57.3779C215.675 58.5708 214.278 59.5208 212.737 60.1737C211.196 60.8265 209.542 61.1693 207.868 61.1826V61.1826Z" fill="var(--accent-purple)"/>
+                    </g>
+                    <path d="M244.721 68V25.7246H261.01C269.564 25.7246 275.395 31.3789 275.395 39.8457V39.9043C275.395 48.3418 269.564 54.0254 261.01 54.0254H252.279V68H244.721ZM259.135 31.9062H252.279V47.9316H259.135C264.555 47.9316 267.719 45.002 267.719 39.9336V39.875C267.719 34.8066 264.555 31.9062 259.135 31.9062ZM280.199 68V36.9453H287.494V42.3066H287.641C288.607 38.5566 291.186 36.3008 294.76 36.3008C295.668 36.3008 296.518 36.4473 297.074 36.5938V43.1855C296.459 42.9512 295.346 42.7754 294.115 42.7754C289.984 42.7754 287.494 45.3828 287.494 49.9824V68H280.199ZM313.393 68.6152C304.252 68.6152 298.363 62.5215 298.363 52.4727V52.4141C298.363 42.4531 304.34 36.3008 313.363 36.3008C322.416 36.3008 328.422 42.3945 328.422 52.4141V52.4727C328.422 62.5508 322.504 68.6152 313.393 68.6152ZM313.422 62.7266C318.021 62.7266 320.98 58.9766 320.98 52.4727V52.4141C320.98 45.9395 317.992 42.2188 313.363 42.2188C308.822 42.2188 305.805 45.9688 305.805 52.4141V52.4727C305.805 59.0059 308.764 62.7266 313.422 62.7266Z" fill="var(--accent-purple)"/>
+                    <defs>
+                        <clipPath id="clip0_1_3">
+                            <rect width="232.532" height="72.9985" fill="white"/>
+                        </clipPath>
+                    </defs>
+                </svg>
+            </div>
+            <button onclick="loadDevices()" id="loadDevicesButton" class="primary-button">Load Devices</button>
+            <p>Click to allow access to your camera and microphone</p>
+        </div>
+
+        <div id="main-content" style="display: none;">
+            <div class="logo-container" style="text-align: center;">
+                <svg width="180" height="45" viewBox="0 0 331 83" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <g clip-path="url(#clip0_1_3)">
+                        <path d="M144.647 28.9283L144.14 28.5155C141.004 25.541 136.845 23.8847 132.521 23.8889C129.301 23.8623 126.107 24.4752 123.125 25.6919C120.144 26.9087 117.433 28.705 115.152 30.9768C114.163 31.9978 113.259 33.097 112.448 34.2638C111.606 33.0538 110.659 31.9201 109.619 30.8756C107.347 28.5906 104.638 26.7857 101.654 25.568C98.6703 24.3504 95.4718 23.7449 92.249 23.7876C85.7279 23.7979 79.465 26.336 74.778 30.8678C73.9056 31.7735 73.1008 32.7419 72.3701 33.7653C71.621 32.7408 70.7979 31.7724 69.9076 30.8678C67.6356 28.5828 64.927 26.7779 61.9431 25.5602C58.9591 24.3426 55.7607 23.7371 52.5379 23.7798C51.4587 23.7909 50.3813 23.869 49.3117 24.0135L42.5711 40.6118C43.7127 39.0337 45.2096 37.7461 46.941 36.8531C48.6724 35.9601 50.5896 35.4867 52.5379 35.4711C55.0907 35.4092 57.6042 36.1089 59.7574 37.4811C61.9107 38.8532 63.6061 40.8355 64.6273 43.1749C65.6485 45.5143 65.9492 48.1048 65.4911 50.6159C65.0329 53.1269 63.8366 55.4445 62.0549 57.273C60.2732 59.1014 57.9868 60.3579 55.4876 60.8819C52.9884 61.4059 50.3897 61.1737 48.023 60.215C45.6564 59.2563 43.6292 57.6145 42.2001 55.4992C40.7711 53.3839 40.005 50.8909 39.9996 48.3385C40.0169 47.7356 40.0742 47.1346 40.171 46.5393L33.2278 63.6751C35.4771 66.6489 38.4004 69.0468 41.7573 70.6716C45.1142 72.2965 48.8089 73.102 52.5379 73.0219C55.7655 73.0302 58.9627 72.3984 61.9442 71.163C64.9258 69.9276 67.6325 68.1132 69.9076 65.8248C70.807 64.9187 71.6355 63.9448 72.3857 62.9117C73.1149 63.9368 73.9143 64.9101 74.778 65.8248C79.4569 70.3835 85.7153 72.9616 92.249 73.0219C95.4766 73.0302 98.6738 72.3984 101.655 71.163C104.637 69.9276 107.344 68.1132 109.619 65.8248C110.659 64.783 111.606 63.6519 112.448 62.4444C113.261 63.6072 114.165 64.7037 115.152 65.7236C119.781 70.2818 126.023 72.8291 132.521 72.8116C136.223 72.8116 140.439 72.2975 144.14 68.699L144.647 68.1927V71.8925H157.115V15.687H144.647V28.9283ZM92.249 61.1904C89.6993 61.2306 87.1953 60.5116 85.0556 59.1249C82.9159 57.7382 81.2374 55.7466 80.2337 53.4035C79.23 51.0603 78.9464 48.4717 79.4191 45.967C79.8918 43.4623 81.0994 41.1548 82.8882 39.3382C84.677 37.5217 86.966 36.2781 89.4641 35.7659C91.9621 35.2537 94.5561 35.4959 96.916 36.4618C99.2758 37.4277 101.295 39.0736 102.716 41.1899C104.137 43.3063 104.896 45.7974 104.896 48.3463C104.912 50.0199 104.597 51.6801 103.969 53.2317C103.341 54.7834 102.413 56.1959 101.238 57.3884C100.063 58.5809 98.6646 59.5298 97.122 60.1809C95.5794 60.832 93.9235 61.1724 92.249 61.1826V61.1904ZM132.521 60.7776C125.944 60.7776 120.388 55.1305 120.388 48.3152C120.388 41.4998 125.944 35.8528 132.521 35.8528C139.098 35.8528 144.647 41.601 144.647 48.3152C144.647 55.0293 139.098 60.7698 132.521 60.7698V60.7776Z" fill="var(--accent-purple)"/>
+                        <path d="M35.4722 15.687L20.3857 52.9574L13.2632 35.5646H0.000183105L14.7282 71.8691H26.0353L48.8365 15.687H35.4722Z" fill="var(--accent-purple)"/>
+                        <path d="M225.238 30.8678C222.965 28.5836 220.257 26.7791 217.273 25.5615C214.289 24.3439 211.091 23.738 207.868 23.7798C201.343 23.791 195.077 26.332 190.389 30.8678C189.945 31.3196 189.54 31.8025 189.135 32.2854C188.722 31.8025 188.309 31.3274 187.857 30.8678C185.583 28.5833 182.873 26.7788 179.888 25.5612C176.902 24.3436 173.703 23.7378 170.479 23.7798C167.081 23.7753 163.718 24.4672 160.598 25.8127V40.5262C161.743 38.9797 163.231 37.7202 164.946 36.847C166.66 35.9738 168.555 35.5108 170.479 35.4945C173.889 35.4945 177.16 36.8485 179.571 39.2587C181.982 41.6689 183.337 44.9378 183.337 48.3463C183.337 51.7548 181.982 55.0238 179.571 57.4339C177.16 59.8441 173.889 61.1982 170.479 61.1982C168.554 61.1822 166.659 60.7185 164.944 59.8438C163.229 58.9691 161.741 57.7075 160.598 56.1587V70.8877C163.71 72.2705 167.074 72.9945 170.479 73.0141C173.708 73.0217 176.906 72.3896 179.889 71.1543C182.871 69.919 185.58 68.1049 187.857 65.817C188.309 65.3653 188.729 64.8824 189.15 64.3994C189.548 64.8824 189.93 65.3653 190.389 65.817C195.071 70.3762 201.332 72.9542 207.868 73.0141C212.753 73.017 217.529 71.5689 221.589 68.8537C225.649 66.1385 228.81 62.2787 230.672 57.7642C232.533 53.2497 233.01 48.2843 232.043 43.4982C231.075 38.7122 228.707 34.3214 225.238 30.8834V30.8678ZM207.868 61.1826C205.318 61.2259 202.812 60.5095 200.671 59.1248C198.529 57.74 196.848 55.7495 195.842 53.4067C194.836 51.0639 194.55 48.4748 195.021 45.9691C195.492 43.4634 196.698 41.1545 198.486 39.3364C200.274 37.5182 202.563 36.2731 205.062 35.7596C207.56 35.246 210.155 35.4873 212.516 36.4527C214.876 37.4181 216.896 39.0639 218.318 41.1806C219.74 43.2973 220.5 45.789 220.5 48.3385C220.515 50.0112 220.201 51.6705 219.574 53.2216C218.947 54.7726 218.021 56.185 216.848 57.3779C215.675 58.5708 214.278 59.5208 212.737 60.1737C211.196 60.8265 209.542 61.1693 207.868 61.1826V61.1826Z" fill="var(--accent-purple)"/>
+                    </g>
+                    <path d="M244.721 68V25.7246H261.01C269.564 25.7246 275.395 31.3789 275.395 39.8457V39.9043C275.395 48.3418 269.564 54.0254 261.01 54.0254H252.279V68H244.721ZM259.135 31.9062H252.279V47.9316H259.135C264.555 47.9316 267.719 45.002 267.719 39.9336V39.875C267.719 34.8066 264.555 31.9062 259.135 31.9062ZM280.199 68V36.9453H287.494V42.3066H287.641C288.607 38.5566 291.186 36.3008 294.76 36.3008C295.668 36.3008 296.518 36.4473 297.074 36.5938V43.1855C296.459 42.9512 295.346 42.7754 294.115 42.7754C289.984 42.7754 287.494 45.3828 287.494 49.9824V68H280.199ZM313.393 68.6152C304.252 68.6152 298.363 62.5215 298.363 52.4727V52.4141C298.363 42.4531 304.34 36.3008 313.363 36.3008C322.416 36.3008 328.422 42.3945 328.422 52.4141V52.4727C328.422 62.5508 322.504 68.6152 313.393 68.6152ZM313.422 62.7266C318.021 62.7266 320.98 58.9766 320.98 52.4727V52.4141C320.98 45.9395 317.992 42.2188 313.363 42.2188C308.822 42.2188 305.805 45.9688 305.805 52.4141V52.4727C305.805 59.0059 308.764 62.7266 313.422 62.7266Z" fill="var(--accent-purple)"/>
+                    <defs>
+                        <clipPath id="clip0_1_3">
+                            <rect width="232.532" height="72.9985" fill="white"/>
+                        </clipPath>
+                    </defs>
+                </svg>
+            </div>
+
+            <div class="video-container">
+                <video id="videoPreview" autoplay muted playsinline></video>
+           </div>
+
+            <div class="controls-container">
+                <div class="settings-row">
+                    <div class="device-select">
+                        <label for="videoSource">Video Source:</label>
+                        <select id="videoSource"></select>
+                    </div>
+
+                    <div class="device-select">
+                        <label for="audioSource">Audio Source:</label>
+                        <select id="audioSource"></select>
+                        <div class="audio-controls">
+                            <button id="micToggle" class="monitor-toggle active" onclick="toggleAudioInput()">
+                                <i data-lucide="mic"></i>
+                            </button>
+                            <button id="monitorToggle" class="monitor-toggle" onclick="toggleAudioMonitor()">
+                                <i data-lucide="volume-x"></i>
+                            </button>
+                            <input type="range" id="monitorVolume" class="volume-slider"
+                                   min="0" max="100" value="100"
+                                   oninput="updateMonitorVolume(this.value)">
+                            <div id="volumeValue" class="volume-value">100%</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="audio-meter">
+                    <div class="stereo-meters">
+                        <div>
+                            <div class="meter-label">
+                                <i data-lucide="waveform"></i>
+                                Left Channel
+                            </div>
+                            <div class="meter-container">
+                                <div id="meter-bar-left" class="meter-bar"></div>
+                                <div id="meter-value-left" class="meter-value">-Inf dB</div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="meter-label">
+                                <i data-lucide="waveform"></i>
+                                Right Channel
+                            </div>
+                            <div class="meter-container">
+                                <div id="meter-bar-right" class="meter-bar"></div>
+                                <div id="meter-value-right" class="meter-value">-Inf dB</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="button-container">
+                    <button onclick="handleStartStreaming()" id="startButton">Start</button>
+                    <button onclick="stopStreaming()" id="stopButton" disabled>Stop</button>
+                </div>
+
+                <div class="status" id="status"></div>
+
+                <div class="settings-group">
+                    <div class="settings-row">
+                        <div>
+                            <label for="videoCodec">Video Codec:</label>
+                            <select id="videoCodec">
+                                <option value="VP8">VP8</option>
+                                <option value="VP9" selected>VP9</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="resolution">Resolution:</label>
+                            <select id="resolution">
+                                <option value="1920x1080" selected>1080p</option>
+                                <option value="1280x720">720p</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="videoBitrate">Video Bitrate:</label>
+                            <select id="videoBitrate">
+                                <option value="1000">1 Mbps</option>
+                                <option value="2500">2.5 Mbps</option>
+                                <option value="4000">4 Mbps</option>
+                                <option value="6000" selected>6 Mbps</option>
+                                <option value="8000">8 Mbps</option>
+                                <option value="10000">10 Mbps</option>
+                                <option value="12000">12 Mbps</option>
+                                <option value="14000">14 Mbps</option>
+                                <option value="16000">16 Mbps</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="fps">Frame Rate:</label>
+                            <select id="fps">
+                                <option value="30">30 fps</option>
+                                <option value="60" selected>60 fps</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="device-select">
+                    <label for="whipEndpoint">WHIP Endpoint URL:</label>
+                    <input type="text" id="whipEndpoint"
+                           value="https://whip.test.streamvoodoo.com/publish/test123"
+                           placeholder="Enter your WHIP endpoint URL">
+                </div>
+
+                <div class="studio-sound-toggle">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="studioSound" onchange="updateAudioConstraints()">
+                        <span class="toggle-slider"></span>
+                        Studio Sound
+                    </label>
+                    <div class="toggle-description">High-quality audio without echo cancellation</div>
+                </div>
+
+
+                <div style="margin-top: 12px;">
+                    <button onclick="shareLink()" id="shareButton" style="width: 100%;">Share Link</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ADD THESE NEW VARIABLES AT THE TOP OF YOUR SCRIPT
+        let roleId = null;
+        let guestId = null;
+        let room = null;
+        let wsConnection = null;
+        let isRemoteControlled = false;
+        let isStreaming = false;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            lucide.createIcons();
+
+            // ADD THIS AFTER lucide.createIcons();
+            // Parse role-based parameters
+            const urlParams = new URLSearchParams(window.location.search);
+            roleId = urlParams.get('participantId') || urlParams.get('roleId'); // marcelo, andrea, host1, etc.
+            guestId = urlParams.get('participantId') || urlParams.get('guestId'); // display name
+            room = urlParams.get('room') || 'therollup';
+
+            console.log('[Guest] Initializing with:', { roleId, guestId, room });
+
+            // Declare autoLoad at the beginning
+            let autoLoad = false;
+
+            // Configure WHIP endpoint based on role
+            if (roleId && room) {
+                const mediamtxBase = urlParams.get('mediamtx') || 'https://stream.voodoostudios.tv';
+                const whipEndpointUrl = `${mediamtxBase}/${room}/${roleId}/whip`;
+
+                const whipInput = document.getElementById('whipEndpoint');
+                if (whipInput) {
+                    whipInput.value = whipEndpointUrl;
+                    console.log(`Auto-configured WHIP endpoint for ${roleId}: ${whipEndpointUrl}`);
+                }
+
+                // Set up remote control if we have role info
+                setupRemoteControl();
+
+                // Update UI to show role info
+                updateGuestInterface();
+
+                // Update current role
+                currentRole = roleId;
+
+                // Auto-load devices
+                autoLoad = true;
+            } else if (room) {
+                // Even without roleId, connect to Socket.io if we have a room
+                console.log(`[Guest] Room detected (${room}), connecting to Socket.io for status updates`);
+                setupWebSocket(room);
+            }
+
+            // Parse URL parameters and configure settings
+            const fullUrl = window.location.href;
+
+            // --- COMMENTED OUT: Old complex parsing for double question mark format ---
+            // We now use standard URL parameters, so this is no longer needed
+            /*
+            let whipEndpoint = '';
+            let paramString = '';
+
+            const firstQuestionMarkIndex = fullUrl.indexOf('?');
+
+            if (firstQuestionMarkIndex !== -1) {
+                const secondQuestionMarkIndex = fullUrl.indexOf('?', firstQuestionMarkIndex + 1);
+
+                if (secondQuestionMarkIndex !== -1) {
+                    // Found two question marks: endpoint is between them, params are after the second
+                    whipEndpoint = fullUrl.substring(firstQuestionMarkIndex + 1, secondQuestionMarkIndex);
+                    paramString = fullUrl.substring(secondQuestionMarkIndex + 1);
+                } else {
+                    // Found only one question mark: the whole string after it is the endpoint
+                    whipEndpoint = fullUrl.substring(firstQuestionMarkIndex + 1);
+                    // No parameters in this case
+                    paramString = '';
+                }
+
+                // Decode the extracted endpoint
+                whipEndpoint = decodeURIComponent(whipEndpoint);
+
+                const whipInput = document.getElementById('whipEndpoint');
+                if (whipInput) {
+                    whipInput.value = whipEndpoint;
+                    autoLoad = true; // Found a WHIP endpoint, let's try loading devices
+
+                    // Extract role from WHIP endpoint if not already set
+                    if (!roleId && whipEndpoint.includes('/whip')) {
+                        // Extract role from endpoint like: /therollup/host1/whip
+                        const match = whipEndpoint.match(/\/([^\/]+)\/whip$/);
+                        if (match) {
+                            roleId = match[1];
+                            currentRole = roleId;
+                            console.log(`Detected role from WHIP endpoint: ${roleId}`);
+
+                            // Set up remote control since we have role info
+                            isRemoteControlled = true;
+                            setupRemoteControl();
+                        }
+                    }
+                }
+            } else {
+                // No question mark found, no endpoint or parameters from URL
+                console.log("No '?' found in URL, using default values.");
+            }
+            */
+            // --- End of commented out code ---
+
+            // Use the URL parameters we already parsed
+            const urlParamsFromString = urlParams;
+
+            // Configure video bitrate
+            if (urlParamsFromString.has('bitrate')) {
+                const bitrate = parseInt(urlParamsFromString.get('bitrate')) * 1000; // Convert Mbps to kbps
+                const bitrateSelect = document.getElementById('videoBitrate');
+                if (bitrateSelect) {
+                    // Find closest matching option
+                    const options = Array.from(bitrateSelect.options);
+                    const closest = options.reduce((prev, curr) => {
+                        return (Math.abs(parseInt(curr.value) - bitrate) < Math.abs(parseInt(prev.value) - bitrate) ? curr : prev);
+                    });
+                    bitrateSelect.value = closest.value;
+                }
+            }
+
+            // Configure studio sound
+            if (urlParamsFromString.has('studiosound')) {
+                const studioSound = urlParamsFromString.get('studiosound').toLowerCase() === 'on';
+                const studioSoundCheckbox = document.getElementById('studioSound');
+                if (studioSoundCheckbox) {
+                    studioSoundCheckbox.checked = studioSound;
+                }
+            }
+
+            // Configure resolution
+            if (urlParamsFromString.has('resolution')) {
+                const resolution = urlParamsFromString.get('resolution').toLowerCase();
+                const resolutionSelect = document.getElementById('resolution');
+                if (resolutionSelect) {
+                    if (resolution === '1080p') {
+                        resolutionSelect.value = '1920x1080';
+                    } else if (resolution === '720p') {
+                        resolutionSelect.value = '1280x720';
+                    }
+                    // Add other resolutions if needed
+                }
+            }
+
+            // Configure simulcast (if needed in the future)
+            if (urlParamsFromString.has('simulcast')) {
+                const simulcast = urlParamsFromString.get('simulcast').toLowerCase() === 'on';
+                // Store this for when we implement simulcast
+                window.simulcastEnabled = simulcast;
+                console.log(`Simulcast parameter found: ${simulcast}`);
+            }
+
+            // Automatically load devices if a WHIP endpoint was provided in the URL
+            if (autoLoad) {
+                console.log('WHIP endpoint found in URL, attempting to load devices automatically.');
+                loadDevices();
+            }
+
+            // Check for autostart parameter
+            if (urlParams.get('autostart') === 'true') {
+                console.log('Auto-start requested');
+                setTimeout(() => {
+                    const startBtn = document.getElementById('startButton');
+                    if (startBtn && !startBtn.disabled) {
+                        console.log('Auto-starting stream...');
+                        startStreaming();
+                    }
+                }, 3000); // Wait for devices to load
+            }
+        });
+
+        let whipClient = null;
+        let mediaStream = null;
+        let audioContext = null;
+        let monitorGainNode = null;
+        let isAudioInputEnabled = true;
+        let audioMeter = null;
+        let meterUpdateInterval = null;
+        let currentRole = null;  // Will be set based on WHIP endpoint (e.g., 'host1', 'guest1', etc.)
+
+        class AudioMeter {
+            constructor(audioContext, stream) {
+                if (!audioContext) {
+                    throw new Error('AudioContext is required for AudioMeter');
+                }
+
+                if (!stream || !stream.getAudioTracks || stream.getAudioTracks().length === 0) {
+                    throw new Error('Valid MediaStream with audio tracks is required for AudioMeter');
+                }
+
+                this.audioContext = audioContext;
+                this.stream = stream;
+
+                console.log('Creating AudioMeter for stream with tracks:',
+                  stream.getTracks().map(t => ({kind: t.kind, label: t.label})));
+
+                const audioTracks = stream.getAudioTracks();
+                if (audioTracks.length === 0) {
+                    throw new Error('No audio tracks found in the provided stream for AudioMeter');
+                }
+
+                const firstAudioTrack = audioTracks[0];
+                const trackSettings = firstAudioTrack.getSettings();
+                this.channelCount = trackSettings.channelCount || 1; // Default to 1 if undefined
+                console.log(`AudioMeter: Detected channel count: ${this.channelCount}`);
+
+                // Create source from stream
+                try {
+                    this.source = audioContext.createMediaStreamSource(stream);
+                } catch (error) {
+                    console.error('Error creating MediaStreamSource:', error);
+                    throw new Error(`Failed to create media stream source: ${error.message}`);
+                }
+
+                // Create analyzer nodes
+                this.analyzerLeft = audioContext.createAnalyser();
+                this.analyzerRight = null; // Initialize right analyzer as null
+
+                // Configure left analyzer
+                this.analyzerLeft.fftSize = 2048;
+                this.analyzerLeft.smoothingTimeConstant = 0.2;
+                this.analyzerLeft.minDecibels = -85;
+                this.analyzerLeft.maxDecibels = 0;
+
+                // Connect based on channel count
+                if (this.channelCount >= 2) {
+                    console.log('AudioMeter: Configuring for stereo.');
+                    this.analyzerRight = audioContext.createAnalyser();
+                    // Configure right analyzer
+                    this.analyzerRight.fftSize = 2048;
+                    this.analyzerRight.smoothingTimeConstant = 0.2;
+                    this.analyzerRight.minDecibels = -85;
+                    this.analyzerRight.maxDecibels = 0;
+
+                    // Create channel splitter
+                    this.splitter = audioContext.createChannelSplitter(2);
+
+                    // Connect the audio graph for metering (stereo)
+                    try {
+                        this.source.connect(this.splitter);
+                        this.splitter.connect(this.analyzerLeft, 0, 0); // Connect source channel 0 to analyzerLeft input 0
+                        this.splitter.connect(this.analyzerRight, 1, 0); // Connect source channel 1 to analyzerRight input 0
+                    } catch (error) {
+                        console.error('Error connecting stereo audio nodes:', error);
+                        this.disconnect();
+                        throw new Error(`Failed to connect stereo audio nodes: ${error.message}`);
+                    }
+
+                    // Create data arrays for analysis
+                    this.dataArrayLeft = new Float32Array(this.analyzerLeft.frequencyBinCount);
+                    this.dataArrayRight = new Float32Array(this.analyzerRight.frequencyBinCount);
+
+                } else {
+                    console.log('AudioMeter: Configuring for mono.');
+                    // Connect the audio graph for metering (mono)
+                    try {
+                        this.source.connect(this.analyzerLeft);
+                    } catch (error) {
+                        console.error('Error connecting mono audio node:', error);
+                        this.disconnect();
+                        throw new Error(`Failed to connect mono audio node: ${error.message}`);
+                    }
+                    // Create data array only for left analysis
+                    this.dataArrayLeft = new Float32Array(this.analyzerLeft.frequencyBinCount);
+                    this.dataArrayRight = null; // No right data array needed for mono
+
+                    // Ensure right meter UI is reset or hidden if adapting from stereo later
+                    const meterBarRight = document.getElementById('meter-bar-right');
+                    const meterValueRight = document.getElementById('meter-value-right');
+                    if(meterBarRight) meterBarRight.style.width = '0%';
+                    if(meterValueRight) meterValueRight.textContent = '-Inf dB';
+                }
+
+                console.log('AudioMeter successfully initialized');
+            }
+
+            disconnect() {
+                console.log('Disconnecting AudioMeter');
+                try {
+                    if (this.source) {
+                        this.source.disconnect();
+                        this.source = null;
+                    }
+                    if (this.splitter) {
+                        this.splitter.disconnect();
+                        this.splitter = null;
+                    }
+                    if (this.analyzerLeft) {
+                        this.analyzerLeft.disconnect();
+                        this.analyzerLeft = null;
+                    }
+                    if (this.analyzerRight) {
+                        this.analyzerRight.disconnect();
+                        this.analyzerRight = null;
+                    }
+                } catch (error) {
+                    console.error('Error during AudioMeter disconnect:', error);
+                }
+
+                // Clean up reference to stream
+                this.stream = null;
+                this.audioContext = null;
+                this.dataArrayLeft = null;
+                this.dataArrayRight = null;
+            }
+
+            getLevel() {
+                // Use this.channelCount to determine logic
+                if (!this.analyzerLeft || (this.channelCount >= 2 && !this.analyzerRight) || !this.dataArrayLeft || (this.channelCount >= 2 && !this.dataArrayRight)) {
+                    // Check if analyzers/arrays exist based on expected channel count
+                    console.warn('AudioMeter attempting to getLevel when not properly initialized or disconnected.');
+                    // Return default safe values
+                    return {
+                        left: { raw: 0, db: -85 },
+                        right: { raw: 0, db: -85 }
+                    };
+                }
+
+                try {
+                    this.analyzerLeft.getFloatTimeDomainData(this.dataArrayLeft);
+                    const rmsLeft = this.calculateRMS(this.dataArrayLeft);
+                    const dbLeft = this.rmsToDb(rmsLeft);
+
+                    let rmsRight = 0;
+                    let dbRight = -85;
+
+                    if (this.channelCount >= 2 && this.analyzerRight && this.dataArrayRight) {
+                        this.analyzerRight.getFloatTimeDomainData(this.dataArrayRight);
+                        rmsRight = this.calculateRMS(this.dataArrayRight);
+                        dbRight = this.rmsToDb(rmsRight);
+                    } else if (this.channelCount < 2) {
+                        // For mono, mirror left channel to right for display consistency
+                        rmsRight = rmsLeft;
+                        dbRight = dbLeft;
+                    }
+
+                    return {
+                        left: {
+                            raw: (dbLeft + 85) / 85,
+                            db: dbLeft
+                        },
+                        right: {
+                            // Use calculated right values for stereo, mirrored left for mono
+                            raw: (dbRight + 85) / 85,
+                            db: dbRight
+                        }
+                    };
+                } catch (error) {
+                    console.error('Error calculating audio levels:', error);
+                    throw error;
+                }
+            }
+
+            calculateRMS(array) {
+                if (!array || array.length === 0) {
+                    return 0;
+                }
+
+                let sum = 0;
+                for (let i = 0; i < array.length; i++) {
+                    sum += array[i] * array[i];
+                }
+                return Math.sqrt(sum / array.length);
+            }
+
+            rmsToDb(rms) {
+                if (rms <= 0) return -85;  // Avoid log of zero or negative
+                return Math.max(-85, Math.min(0, 20 * Math.log10(rms)));
+            }
+        }
+
+        function updateAudioMeter() {
+            if (!audioMeter) return;
+
+            try {
+                const levels = audioMeter.getLevel();
+
+                // Update left channel
+                const meterBarLeft = document.getElementById('meter-bar-left');
+                const meterValueLeft = document.getElementById('meter-value-left');
+                const widthLeft = Math.min(100, levels.left.raw * 100);
+                meterBarLeft.style.width = `${widthLeft}%`;
+                meterValueLeft.textContent = `${levels.left.db.toFixed(1)} dB`;
+
+                // Update right channel
+                const meterBarRight = document.getElementById('meter-bar-right');
+                const meterValueRight = document.getElementById('meter-value-right');
+                const widthRight = Math.min(100, levels.right.raw * 100);
+                meterBarRight.style.width = `${widthRight}%`;
+                meterValueRight.textContent = `${levels.right.db.toFixed(1)} dB`;
+            } catch (error) {
+                console.error('Error updating audio meter:', error);
+
+                // If we encounter an error, stop the interval and reset the meter
+                if (meterUpdateInterval) {
+                    clearInterval(meterUpdateInterval);
+                    meterUpdateInterval = null;
+                }
+
+                // Try to set up audio monitoring again after a short delay
+                setTimeout(() => {
+                    if (mediaStream && mediaStream.getAudioTracks().length > 0) {
+                        setupAudioMonitoring().catch(err => {
+                            console.error("Failed to recover audio monitoring:", err);
+                        });
+                    }
+                }, 1000);
+            }
+        }
+
+        // Helper function to identify preferred audio and video devices
+        function findPreferredDevice(devices, kind) {
+            const preferenceOrder = [
+                'elgato', // Elgato capture cards (HD60, 4K, etc.)
+                'game capture',
+                'capture card',
+                'avermedia',
+                'blackmagic',
+                'hdmi',
+                'capture',
+                'cam link'
+            ];
+
+            // Check for devices in order of preference
+            for (const keyword of preferenceOrder) {
+                const device = devices.find(d =>
+                    d.kind === kind &&
+                    d.label.toLowerCase().includes(keyword));
+
+                if (device) {
+                    console.log(`Found preferred ${kind} (${keyword}):`, device.label);
+                    return device;
+                }
+            }
+
+            // If no preferred device found, return the first non-built-in device if possible
+            const nonBuiltIn = devices.find(d =>
+                d.kind === kind &&
+                !d.label.toLowerCase().includes('built-in') &&
+                !d.label.toLowerCase().includes('default'));
+
+            if (nonBuiltIn) {
+                console.log(`Using non-built-in ${kind}:`, nonBuiltIn.label);
+                return nonBuiltIn;
+            }
+
+            // Fall back to the first device of requested kind if no preferred ones found
+            const firstDevice = devices.find(d => d.kind === kind);
+            if (firstDevice) {
+                console.log(`Using first available ${kind}:`, firstDevice.label);
+                return firstDevice;
+            }
+
+            return null;
+        }
+
+        // For backward compatibility
+        function findPreferredAudioDevice(devices) {
+            return findPreferredDevice(devices, 'audioinput');
+        }
+
+        // Find preferred video device
+        function findPreferredVideoDevice(devices) {
+            return findPreferredDevice(devices, 'videoinput');
+        }
+
+        async function loadDevices() {
+            try {
+                console.log('Starting device loading...');
+                const loadButton = document.getElementById('loadDevicesButton');
+                if (loadButton) loadButton.disabled = true;
+                updateStatus('Requesting device access...');
+                
+                // Request permissions first for better Safari/incognito support
+                // This is especially important for Safari which needs explicit permission
+                try {
+                    // Request both audio and video permissions
+                    const tempStream = await navigator.mediaDevices.getUserMedia({ 
+                        video: true, 
+                        audio: true 
+                    });
+                    // Stop the temporary stream - we just needed permissions
+                    tempStream.getTracks().forEach(track => track.stop());
+                } catch (permError) {
+                    console.warn('Permission request failed:', permError);
+                    // Continue anyway - some browsers allow enumeration without permission
+                }
+                
+                // Get list of devices - same as screenvoodoo
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                
+                // Debug: log all devices
+                console.log('All enumerated devices:', devices);
+                devices.forEach(device => {
+                    console.log(`Device: ${device.kind} - ${device.label} - ${device.deviceId}`);
+                });
+                
+                const videoDevices = devices.filter(device => device.kind === 'videoinput');
+                const audioDevices = devices.filter(device => device.kind === 'audioinput');
+                
+                console.log('Video devices found:', videoDevices.length, videoDevices);
+                console.log('Audio devices found:', audioDevices.length, audioDevices);
+
+                // Populate video source dropdown
+                const videoSelect = document.getElementById('videoSource');
+                videoSelect.innerHTML = '';
+                
+                // Sort video devices to put webcams first, then virtual cameras
+                const sortedVideoDevices = [...videoDevices].sort((a, b) => {
+                    const aLabel = (a.label || '').toLowerCase();
+                    const bLabel = (b.label || '').toLowerCase();
+                    
+                    // Prioritize built-in/integrated cameras
+                    if (aLabel.includes('built-in') || aLabel.includes('integrated') || aLabel.includes('facetime')) return -1;
+                    if (bLabel.includes('built-in') || bLabel.includes('integrated') || bLabel.includes('facetime')) return 1;
+                    
+                    // Then USB webcams
+                    if (aLabel.includes('webcam') || aLabel.includes('camera')) return -1;
+                    if (bLabel.includes('webcam') || bLabel.includes('camera')) return 1;
+                    
+                    // Virtual cameras (OBS, etc) come after
+                    if (aLabel.includes('obs') || aLabel.includes('virtual')) return 1;
+                    if (bLabel.includes('obs') || bLabel.includes('virtual')) return -1;
+                    
+                    return 0;
+                });
+                
+                // Add sorted video devices
+                sortedVideoDevices.forEach(device => {
+                    const option = document.createElement('option');
+                    option.value = device.deviceId;
+                    option.text = device.label || `Camera ${videoDevices.indexOf(device) + 1}`;
+                    videoSelect.appendChild(option);
+                });
+
+                // Add screen share option last
+                const screenOption = document.createElement('option');
+                screenOption.value = 'screen';
+                screenOption.text = 'Screen Share';
+                videoSelect.appendChild(screenOption);
+
+                // Populate audio source dropdown
+                const audioSelect = document.getElementById('audioSource');
+                audioSelect.innerHTML = '';
+                
+                audioDevices.forEach(device => {
+                    const option = document.createElement('option');
+                    option.value = device.deviceId;
+                    option.text = device.label || `Microphone ${audioDevices.indexOf(device) + 1}`;
+                    audioSelect.appendChild(option);
+                });
+
+                // Set up change handlers
+                videoSelect.onchange = () => updateDevice('video');
+                audioSelect.onchange = () => updateDevice('audio');
+
+                // Switch to main UI
+                document.getElementById('initial-prompt').style.display = 'none';
+                document.getElementById('main-content').style.display = 'block';
+
+                updateStatus(`Found ${videoDevices.length} video devices and ${audioDevices.length} audio devices.`);
+                
+                // Initialize mediaStream if not already created
+                if (!mediaStream) {
+                    mediaStream = new MediaStream();
+                }
+                
+                // Auto-select first devices and initialize streams
+                if (videoDevices.length > 0 || audioDevices.length > 0) {
+                    // Initialize with first available devices
+                    if (videoDevices.length > 0) {
+                        setTimeout(() => updateDevice('video'), 500);
+                    }
+                    if (audioDevices.length > 0) {
+                        setTimeout(() => updateDevice('audio'), 1000);
+                    }
+                }
+
+            } catch (error) {
+                console.error('Device loading error:', error);
+                const loadButton = document.getElementById('loadDevicesButton');
+                if (loadButton) loadButton.disabled = false;
+                
+                // Show more helpful error messages
+                if (error.name === 'NotAllowedError') {
+                    updateStatus('Permission denied. Please allow camera and microphone access.', true);
+                } else if (error.name === 'NotFoundError') {
+                    updateStatus('No camera or microphone found. Please connect a device.', true);
+                } else if (error.name === 'NotReadableError') {
+                    updateStatus('Device is already in use. Please close other applications using the camera/microphone.', true);
+                } else {
+                    updateStatus(`Error loading devices: ${error.message}. Please check browser permissions.`, true);
+                }
+            }
+        }
+        
+        // Simple retry function for device access
+        async function retryDeviceAccess() {
+            // Just reload the devices
+            document.getElementById('loadDevicesButton').disabled = false;
+            await loadDevices();
+        }
+
+        async function updateDevice(type) {
+            try {
+                const videoSource = document.getElementById('videoSource').value;
+                const audioSource = document.getElementById('audioSource').value;
+                const fps = parseInt(document.getElementById('fps').value);
+                const studioSound = document.getElementById('studioSound').checked;
+                
+                // Initialize mediaStream if it doesn't exist
+                if (!mediaStream) {
+                    mediaStream = new MediaStream();
+                }
+
+                // Handle screen share separately
+                if (type === 'video' && videoSource === 'screen') {
+                    try {
+                        // Request screen sharing with audio option
+                        const screenStream = await navigator.mediaDevices.getDisplayMedia({
+                            video: {
+                                cursor: "always",
+                                ...getResolutionConstraints(),
+                                frameRate: { ideal: fps }
+                            },
+                            audio: true // Enable audio option for Chrome tab audio sharing
+                        });
+
+                        // Handle the screen share ending
+                        screenStream.getVideoTracks()[0].addEventListener('ended', async () => {
+                            updateStatus('Screen sharing ended');
+
+                            // Stop all tracks from the screen stream
+                            screenStream.getTracks().forEach(track => track.stop());
+
+                            // Check if we had tab audio and need to restore microphone
+                            const hadScreenAudio = screenStream.getAudioTracks().length > 0;
+
+                            // Reset to the first camera in the list
+                            const videoSelect = document.getElementById('videoSource');
+                            // Find the first non-screen option
+                            for (let i = 0; i < videoSelect.options.length; i++) {
+                                if (videoSelect.options[i].value !== 'screen') {
+                                    videoSelect.selectedIndex = i;
+                                    break;
+                                }
+                            }
+
+                            // If we were using tab audio, remove the "Screen Audio" option from the dropdown
+                            if (hadScreenAudio) {
+                                const audioSelect = document.getElementById('audioSource');
+                                // Find and remove the screen audio option
+                                for (let i = 0; i < audioSelect.options.length; i++) {
+                                    if (audioSelect.options[i].value === 'screen-audio') {
+                                        audioSelect.remove(i);
+                                        break;
+                                    }
+                                }
+
+                                // Select the first available microphone
+                                if (audioSelect.options.length > 0) {
+                                    audioSelect.selectedIndex = 0;
+                                }
+                            }
+
+                            // Update the video device
+                            await updateDevice('video');
+
+                            // If we were using tab audio, we need to restore the microphone
+                            if (hadScreenAudio) {
+                                await updateDevice('audio');
+                            }
+                        });
+
+                        // Replace the video track
+                        const videoTrack = screenStream.getVideoTracks()[0];
+                        const existingVideoTrack = mediaStream.getVideoTracks()[0];
+                        if (existingVideoTrack) {
+                            mediaStream.removeTrack(existingVideoTrack);
+                            existingVideoTrack.stop();
+                        }
+                        mediaStream.addTrack(videoTrack);
+
+                        // Check if screen share includes audio (Chrome tab audio)
+                        const screenAudioTrack = screenStream.getAudioTracks()[0];
+                        if (screenAudioTrack) {
+                            // User selected to share tab audio
+                            const existingAudioTrack = mediaStream.getAudioTracks()[0];
+                            if (existingAudioTrack) {
+                                mediaStream.removeTrack(existingAudioTrack);
+                                existingAudioTrack.stop();
+                            }
+
+                            // Apply studio sound settings to the screen audio track if enabled
+                            const studioSound = document.getElementById('studioSound').checked;
+                            if (studioSound) {
+                                try {
+                                    // Apply studio sound constraints to screen audio track
+                                    // Note: These are applied as constraints but may not affect the track
+                                    // since it's already captured. We'll also apply processing if needed.
+                                    const constraints = {
+                                        autoGainControl: false,
+                                        echoCancellation: false,
+                                        noiseSuppression: false
+                                    };
+
+                                    // Apply constraints if the browser supports it
+                                    if (screenAudioTrack.applyConstraints) {
+                                        await screenAudioTrack.applyConstraints(constraints);
+                                    }
+
+                                    updateStatus(`Screen sharing with tab audio: Studio Sound enabled`);
+                                } catch (err) {
+                                    console.warn('Could not apply studio sound settings to screen audio:', err);
+                                    // Continue anyway, as this is an enhancement
+                                }
+                            }
+
+                            mediaStream.addTrack(screenAudioTrack);
+
+                            // Add "Screen Audio" option to the audio source dropdown
+                            const audioSelect = document.getElementById('audioSource');
+
+                            // Check if we already have a screen audio option
+                            let hasScreenAudioOption = false;
+                            for (let i = 0; i < audioSelect.options.length; i++) {
+                                if (audioSelect.options[i].value === 'screen-audio') {
+                                    hasScreenAudioOption = true;
+                                    break;
+                                }
+                            }
+
+                            // Add the screen audio option if it doesn't exist
+                            if (!hasScreenAudioOption) {
+                                const screenAudioOption = document.createElement('option');
+                                screenAudioOption.value = 'screen-audio';
+                                screenAudioOption.text = 'Screen Audio';
+                                // Insert at the beginning of the dropdown
+                                audioSelect.insertBefore(screenAudioOption, audioSelect.firstChild);
+                            }
+
+                            // Select the screen audio option
+                            audioSelect.value = 'screen-audio';
+
+                            // Update audio monitoring for the new track
+                            if (audioMeter) {
+                                audioMeter.disconnect();
+                                audioMeter = null;
+                            }
+                            if (meterUpdateInterval) {
+                                clearInterval(meterUpdateInterval);
+                                meterUpdateInterval = null;
+                            }
+                            await setupAudioMonitoring();
+
+                            // If we're streaming, replace both video and audio tracks
+                            if (whipClient && whipClient.peerConnection.connectionState === 'connected') {
+                                await whipClient.replaceTrack(videoTrack);
+                                await whipClient.replaceTrack(screenAudioTrack);
+                            }
+
+                            updateStatus(`Screen sharing started with tab audio: ${videoTrack.label}`);
+                        } else {
+                            // No tab audio selected, just update the video preview
+                            // Update the video preview
+                            const videoPreview = document.getElementById('videoPreview');
+                            videoPreview.srcObject = mediaStream;
+
+                            // If we're streaming, replace just the video track
+                            if (whipClient && whipClient.peerConnection.connectionState === 'connected') {
+                                await whipClient.replaceTrack(videoTrack);
+                            }
+
+                            updateStatus(`Screen sharing started: ${videoTrack.label}`);
+                        }
+
+                        // Always update the video preview
+                        const videoPreview = document.getElementById('videoPreview');
+                        videoPreview.srcObject = mediaStream;
+                        return;
+                    } catch (err) {
+                        // User cancelled or error occurred
+                        updateStatus('Screen sharing cancelled or error occurred', true);
+                        console.error('Screen sharing error:', err);
+
+                        // Reset to the first camera in the list
+                        const videoSelect = document.getElementById('videoSource');
+                        // Find the first non-screen option
+                        for (let i = 0; i < videoSelect.options.length; i++) {
+                            if (videoSelect.options[i].value !== 'screen') {
+                                videoSelect.selectedIndex = i;
+                                break;
+                            }
+                        }
+                        return;
+                    }
+                }
+
+                // Normal device selection (not screen share)
+                const constraints = {
+                    video: type === 'video' ? {
+                        deviceId: videoSource ? { exact: videoSource } : undefined,
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 },
+                        frameRate: { ideal: fps }
+                    } : false,
+                    audio: type === 'audio' ? {
+                        deviceId: audioSource ? { exact: audioSource } : undefined,
+                        autoGainControl: !studioSound,
+                        echoCancellation: !studioSound,
+                        noiseSuppression: !studioSound,
+                        channelCount: studioSound ? 2 : 1,
+                        sampleRate: studioSound ? 48000 : 44100,
+                        sampleSize: studioSound ? 24 : 16
+                    } : false
+                };
+
+                try {
+                    // Direct getUserMedia call without retry logic - matches screenvoodoo
+                    const newStream = await navigator.mediaDevices.getUserMedia(constraints);
+
+                    if (type === 'video') {
+                        const videoTrack = newStream.getVideoTracks()[0];
+                        const existingVideoTrack = mediaStream.getVideoTracks()[0];
+                        if (existingVideoTrack) {
+                            mediaStream.removeTrack(existingVideoTrack);
+                            existingVideoTrack.stop();
+                        }
+                        mediaStream.addTrack(videoTrack);
+                        
+                        // Update the video preview
+                        const videoPreview = document.getElementById('videoPreview');
+                        videoPreview.srcObject = mediaStream;
+                        
+                        updateStatus(`Video switched to: ${videoTrack.label}`);
+
+                        // If we're streaming, replace the track in the connection
+                        if (whipClient && whipClient.peerConnection.connectionState === 'connected') {
+                            await whipClient.replaceTrack(videoTrack);
+                        }
+                    } else if (type === 'audio') {
+                        // Check if we're switching from "Screen Audio" to a microphone
+                        if (audioSource === 'screen-audio') {
+                            // User selected "Screen Audio" but we're already using it
+                            // This is just a UI selection, no need to change the actual audio track
+                            updateStatus('Using screen audio');
+                            return;
+                        }
+
+                        // Get the new audio track from the microphone
+                        const audioTrack = newStream.getAudioTracks()[0];
+                        const existingAudioTrack = mediaStream.getAudioTracks()[0];
+
+                        // Check if the existing track is from screen sharing
+                        const isScreenAudioTrack = existingAudioTrack &&
+                                                  existingAudioTrack.label &&
+                                                  (existingAudioTrack.label.includes('screen') ||
+                                                   existingAudioTrack.label.includes('tab'));
+
+                        // If we're switching from screen audio to microphone, remove the screen audio option
+                        if (isScreenAudioTrack) {
+                            const audioSelect = document.getElementById('audioSource');
+                            // Find and remove the screen audio option
+                            for (let i = 0; i < audioSelect.options.length; i++) {
+                                if (audioSelect.options[i].value === 'screen-audio') {
+                                    audioSelect.remove(i);
+                                    break;
+                                }
+                            }
+                        }
+
+                        // Replace the audio track
+                        if (existingAudioTrack) {
+                            mediaStream.removeTrack(existingAudioTrack);
+                            existingAudioTrack.stop();
+                        }
+                        mediaStream.addTrack(audioTrack);
+
+                        // If we're streaming, replace the track in the connection
+                        if (whipClient && whipClient.peerConnection.connectionState === 'connected') {
+                            await whipClient.replaceTrack(audioTrack);
+                        }
+
+                        // Reinitialize audio monitoring after changing audio source
+                        await setupAudioMonitoring();
+
+                        // Reset monitor toggle button state
+                        const monitorToggle = document.getElementById('monitorToggle');
+                        if (monitorToggle.classList.contains('active')) {
+                            const volume = document.getElementById('monitorVolume').value;
+                            if (monitorGainNode && audioContext) {
+                                monitorGainNode.gain.setValueAtTime(volume / 100, audioContext.currentTime);
+                            }
+                        }
+                    }
+
+                    document.getElementById('status').textContent = `${type} device updated successfully`;
+                } catch (error) {
+                    console.error('Error updating device:', error);
+                    document.getElementById('status').textContent = 'Error updating device: ' + error.message;
+                }
+            } catch (error) {
+                console.error('Device update error:', error);
+                
+                // Special handling for NotReadableError
+                if (error.name === 'NotReadableError') {
+                    let statusHtml = `<div style="color: #ff6b6b;">
+                        <strong>Error: Camera/Microphone in use</strong>
+                    </div>
+                    <div style="background: #2a2a2a; padding: 10px; border-radius: 5px; margin-top: 10px;">
+                        <strong>Quick fixes:</strong>
+                        <ul style="margin: 5px 0; padding-left: 20px;">
+                            <li>Close other apps using the ${type === 'video' ? 'camera' : 'microphone'}</li>
+                            <li>Try selecting a different device from the dropdown</li>
+                            <li>Click the retry button below</li>
+                        </ul>
+                    </div>
+                    <button onclick="retryDeviceAccess()" style="margin-top: 10px; padding: 5px 15px; background: #007acc; border: none; border-radius: 3px; cursor: pointer;">Retry Device Access</button>`;
+                    
+                    document.getElementById('status').innerHTML = statusHtml;
+                } else {
+                    updateStatus(`Error updating ${type} device: ${error.message}`, true);
+                }
+            }
+        }
+
+        class WHIPClient {
+            constructor(endpoint) {
+                if (!endpoint) {
+                    throw new Error('WHIP endpoint URL is required');
+                }
+                this.endpoint = endpoint;
+                this.peerConnection = new RTCPeerConnection({
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        {
+                            urls: 'turn:159.65.180.44:3478',
+                            username: 'voodooturn',
+                            credential: 'vT_s7r0ngP@sswrd_4U'
+                        }
+                    ],
+                    iceCandidatePoolSize: 10,
+                    bundlePolicy: 'max-bundle',
+                    rtcpMuxPolicy: 'require',
+                    sdpSemantics: 'unified-plan'
+                });
+
+                // Store track senders for replacement
+                this.videoSender = null;
+                this.audioSender = null;
+
+                // Add connection state handlers for better error reporting
+                this.peerConnection.onconnectionstatechange = () => {
+                    const state = this.peerConnection.connectionState;
+                    updateStatus(`Connection state: ${state}`);
+                };
+
+                this.peerConnection.oniceconnectionstatechange = () => {
+                    const state = this.peerConnection.iceConnectionState;
+                    updateStatus(`ICE connection state: ${state}`);
+
+                    if (state === 'failed') {
+                        this.restartIce();
+                    }
+                };
+            }
+
+            async replaceTrack(track) {
+                try {
+                    if (!this.peerConnection) return;
+
+                    let sender;
+                    if (track.kind === 'video') {
+                        if (!this.videoSender) {
+                            this.videoSender = this.peerConnection.getSenders().find(s => s.track?.kind === 'video');
+                        }
+                        sender = this.videoSender;
+                    } else if (track.kind === 'audio') {
+                        if (!this.audioSender) {
+                            this.audioSender = this.peerConnection.getSenders().find(s => s.track?.kind === 'audio');
+                        }
+                        sender = this.audioSender;
+                    }
+
+                    if (sender) {
+                        await sender.replaceTrack(track);
+
+                        // Update encoding parameters for video tracks
+                        if (track.kind === 'video') {
+                            const params = sender.getParameters();
+                            const videoBitrate = parseInt(document.getElementById('videoBitrate').value);
+                            const fps = parseInt(document.getElementById('fps').value);
+
+                            params.encodings = [{
+                                maxBitrate: videoBitrate * 1000,
+                                minBitrate: videoBitrate * 1000,
+                                maxFramerate: fps,
+                                scaleResolutionDownBy: 1.0,
+                                active: true,
+                                networkPriority: "high",
+                                priority: "high",
+                                degradationPreference: "maintain-resolution"
+                            }];
+
+                            await sender.setParameters(params);
+                        }
+
+                        updateStatus(`${track.kind} track replaced successfully`);
+                    }
+                } catch (error) {
+                    updateStatus(`Error replacing ${track.kind} track: ${error.message}`, true);
+                    console.error('Track replacement error:', error);
+                }
+            }
+
+            async restartIce() {
+                try {
+                    await this.peerConnection.restartIce();
+                    const offer = await this.peerConnection.createOffer({ iceRestart: true });
+                    await this.peerConnection.setLocalDescription(offer);
+                } catch (error) {
+                    updateStatus(`Failed to restart ICE: ${error.message}`, true);
+                }
+            }
+
+            async startStream(stream) {
+                try {
+                    // Add tracks to the peer connection with high priority
+                    const senders = stream.getTracks().map(track => {
+                        const sender = this.peerConnection.addTrack(track, stream);
+
+                        // Set selected codec and high priority for video tracks
+                        if (track.kind === 'video') {
+                            const transceivers = this.peerConnection.getTransceivers();
+                            const transceiver = transceivers.find(t => t.sender === sender);
+                            if (transceiver) {
+                                const codecs = RTCRtpSender.getCapabilities('video').codecs;
+                                const selectedCodec = document.getElementById('videoCodec').value;
+                                const preferredCodec = codecs.find(codec => codec.mimeType === `video/${selectedCodec}`);
+                                if (preferredCodec) {
+                                    transceiver.setCodecPreferences([preferredCodec, ...codecs.filter(c => c !== preferredCodec)]);
+                                }
+                                transceiver.direction = 'sendonly';
+
+                                // Enhanced video sender parameters
+                                const params = sender.getParameters();
+                                const videoBitrate = parseInt(document.getElementById('videoBitrate').value);
+                                const fps = parseInt(document.getElementById('fps').value);
+
+                                params.encodings = [{
+                                    maxBitrate: videoBitrate * 1000,
+                                    minBitrate: videoBitrate * 1000,
+                                    maxFramerate: fps,
+                                    scaleResolutionDownBy: 1.0,
+                                    active: true,
+                                    networkPriority: "high",
+                                    priority: "high",
+                                    degradationPreference: "maintain-resolution",
+                                    adaptivePtime: false,
+                                    bitratePriority: 1.0,
+                                    bitrateMode: "constant",
+                                    // Additional performance settings
+                                    scaleResolutionDownBy: 1.0,
+                                    maxBitrate: videoBitrate * 1000,
+                                    minBitrate: videoBitrate * 1000,
+                                    maxFramerate: fps,
+                                    networkPriority: "high",
+                                    priority: "high",
+                                    degradationPreference: "maintain-resolution"
+                                }];
+
+                                sender.setParameters(params);
+                            }
+                        }
+                        return sender;
+                    });
+
+                    // Create and set local description with specific constraints
+                    const offer = await this.peerConnection.createOffer({
+                        offerToReceiveAudio: false,
+                        offerToReceiveVideo: false,
+                        voiceActivityDetection: false,
+                        iceRestart: true
+                    });
+
+                    // Modify SDP to set bitrates and priorities
+                    offer.sdp = this.modifySDPWithBitrate(offer.sdp);
+
+                    await this.peerConnection.setLocalDescription(offer);
+                    await this.waitForIceGathering();
+
+                    const response = await fetch(this.endpoint, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/sdp',
+                        },
+                        body: this.peerConnection.localDescription.sdp
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    const answer = await response.text();
+                    await this.peerConnection.setRemoteDescription({
+                        type: 'answer',
+                        sdp: answer
+                    });
+
+                    // Log the negotiated configuration
+                    const videoSender = this.peerConnection.getSenders().find(s => s.track?.kind === 'video');
+                    if (videoSender) {
+                        const params = await videoSender.getParameters();
+                        console.log('Negotiated video parameters:', params.encodings);
+                    }
+
+                } catch (error) {
+                    throw error;
+                }
+            }
+
+            modifySDPWithBitrate(sdp) {
+                const lines = sdp.split('\r\n');
+                const newLines = [];
+                let isVideoSection = false;
+                const videoBitrate = parseInt(document.getElementById('videoBitrate').value);
+                const fps = parseInt(document.getElementById('fps').value);
+
+                for (let line of lines) {
+                    // Detect video section
+                    if (line.startsWith('m=video')) {
+                        isVideoSection = true;
+                    } else if (line.startsWith('m=')) {
+                        isVideoSection = false;
+                    }
+
+                    // Change sendrecv to sendonly
+                    if (line.includes('a=sendrecv')) {
+                        newLines.push('a=sendonly');
+                        continue;
+                    }
+
+                    // Add the current line
+                    newLines.push(line);
+
+                    // Add video-specific settings
+                    if (isVideoSection && line.startsWith('c=')) {
+                        // Enhanced bandwidth settings
+                        newLines.push(`b=AS:${videoBitrate}`);
+                        newLines.push(`b=TIAS:${videoBitrate * 1000}`);
+
+                        // Enhanced transport feedback
+                        newLines.push('a=rtcp-fb:* transport-cc');
+                        newLines.push('a=rtcp-fb:* nack');
+                        newLines.push('a=rtcp-fb:* nack pli');
+                        newLines.push('a=rtcp-fb:* ccm fir');
+                        newLines.push('a=rtcp-fb:* goog-remb');
+
+                        // Enhanced priority settings
+                        newLines.push('a=content:main');
+                        newLines.push('a=priority:high');
+                        newLines.push('a=x-google-max-bitrate:' + (videoBitrate * 1000));
+                        newLines.push('a=x-google-min-bitrate:' + (videoBitrate * 1000));
+                        newLines.push('a=x-google-start-bitrate:' + (videoBitrate * 1000));
+                        newLines.push('a=x-google-cpu-overuse-detection:false');
+
+                        // Additional performance settings
+                        newLines.push('a=x-google-buffer-latency:0');
+                        newLines.push('a=x-google-enable-pre-encode-drop:false');
+                        newLines.push('a=x-google-experiment-frame-rate-control:true');
+                        newLines.push('a=x-google-cpu-load-policy:high');
+
+                        // Codec specific settings
+                        const selectedCodec = document.getElementById('videoCodec').value;
+                        if (selectedCodec === 'VP9') {
+                            newLines.push('a=fmtp:96 profile-id=0');
+                            newLines.push('a=fmtp:96 quality=realtime');
+                            newLines.push('a=fmtp:96 speed=8');
+                            newLines.push('a=fmtp:96 deadline=1');
+                            newLines.push('a=fmtp:96 max-fs=8160');
+                            newLines.push(`a=fmtp:96 max-fr=${fps}`);
+                            newLines.push('a=fmtp:96 lag-in-frames=0');
+                            newLines.push('a=fmtp:96 error-resilient=1');
+                        }
+                    }
+                }
+
+                // <<< START STEREO PARAMETER MODIFICATION >>>
+                const studioSoundEnabled = document.getElementById('studioSound')?.checked;
+                let opusPayloadType = null;
+
+                // Find the payload type for Opus (typically opus/48000/2)
+                for (let i = 0; i < newLines.length; i++) {
+                    if (newLines[i].includes('opus/48000/2')) {
+                        const match = newLines[i].match(/^a=rtpmap:(\d+) opus\/48000\/2/);
+                        if (match && match[1]) {
+                            opusPayloadType = match[1];
+                            console.log(`[modifySDP] Found Opus payload type: ${opusPayloadType}`);
+                            break;
+                        }
+                    }
+                }
+
+                // Modify the fmtp line for Opus based on studioSound setting
+                if (opusPayloadType) {
+                    for (let i = 0; i < newLines.length; i++) {
+                        if (newLines[i].startsWith(`a=fmtp:${opusPayloadType}`)) {
+                            console.log(`[modifySDP] Original Opus fmtp: ${newLines[i]}`);
+                            // Remove existing stereo parameters first to avoid duplicates
+                            let fmtpLine = newLines[i].replace(/;\s*stereo=1/g, '').replace(/;\s*sprop-stereo=1/g, '');
+
+                            if (studioSoundEnabled) {
+                                // Add stereo parameters if Studio Sound is ON
+                                if (!fmtpLine.includes('usedtx=0')) { // dtx=1 is incompatible with stereo=1
+                                     fmtpLine += ';stereo=1;sprop-stereo=1';
+                                     console.log(`[modifySDP] Added stereo parameters for Studio Sound.`);
+                                } else {
+                                     console.warn('[modifySDP] Cannot enable stereo with DTX enabled. Keeping mono.');
+                                }
+                            } else {
+                                console.log(`[modifySDP] Ensuring mono parameters (Studio Sound OFF).`);
+                            }
+
+                            newLines[i] = fmtpLine;
+                            console.log(`[modifySDP] Modified Opus fmtp: ${newLines[i]}`);
+                            break; // Found and modified the line, exit loop
+                        }
+                    }
+                }
+                // <<< END STEREO PARAMETER MODIFICATION >>>
+
+                return newLines.join('\r\n');
+            }
+
+            async waitForIceGathering() {
+                if (this.peerConnection.iceGatheringState === 'complete') {
+                    return;
+                }
+
+                await new Promise((resolve) => {
+                    const checkState = () => {
+                        if (this.peerConnection.iceGatheringState === 'complete') {
+                            this.peerConnection.removeEventListener('icegatheringstatechange', checkState);
+                            resolve();
+                        }
+                    };
+                    this.peerConnection.addEventListener('icegatheringstatechange', checkState);
+                    setTimeout(resolve, 5000); // Timeout after 5 seconds
+                });
+            }
+
+            stopStream() {
+                if (this.peerConnection) {
+                    this.peerConnection.close();
+                }
+            }
+        }
+
+        async function startStreaming() {
+            try {
+                const whipEndpoint = document.getElementById('whipEndpoint').value;
+                if (!whipEndpoint) {
+                    throw new Error('Please enter a WHIP endpoint URL');
+                }
+
+                document.getElementById('startButton').disabled = true;
+                document.getElementById('stopButton').disabled = false;
+                isStreaming = true;
+
+                if (whipClient) {
+                    await stopStreaming();
+                }
+
+                whipClient = new WHIPClient(whipEndpoint);
+                await whipClient.startStream(mediaStream);
+
+                updateStatus('Streaming started');
+
+                // Always send status update
+                sendStatusUpdate('streaming');
+            } catch (error) {
+                updateStatus(`Streaming failed: ${error.message}`, true);
+
+                // Always send error status
+                sendStatusUpdate('error', error.message);
+
+                await stopStreaming();
+            }
+        }
+
+        async function stopStreaming() {
+            try {
+                document.getElementById('startButton').disabled = false;
+                document.getElementById('stopButton').disabled = true;
+                isStreaming = false;
+
+                if (whipClient) {
+                    whipClient.stopStream();
+                    whipClient = null;
+                }
+
+                updateStatus('Stream stopped');
+
+                // Always send status update
+                sendStatusUpdate('stopped');
+            } catch (error) {
+                updateStatus(`Error stopping stream: ${error.message}`, true);
+
+                // Always send error status
+                sendStatusUpdate('error', error.message);
+            }
+        }
+
+        function updateStatus(message, isError = false) {
+            const statusElement = document.getElementById('status');
+            statusElement.textContent = message;
+            statusElement.className = 'status' + (isError ? ' error' : '');
+        }
+
+        navigator.mediaDevices.addEventListener('devicechange', async () => {
+            try {
+                // Get current selections
+                const currentVideoId = document.getElementById('videoSource').value;
+                const currentAudioId = document.getElementById('audioSource').value;
+
+                // Get current device list
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const videoDevices = devices.filter(device => device.kind === 'videoinput');
+                const audioDevices = devices.filter(device => device.kind === 'audioinput');
+
+                // Check if current devices still exist
+                const videoExists = videoDevices.some(device => device.deviceId === currentVideoId);
+                const audioExists = audioDevices.some(device => device.deviceId === currentAudioId);
+
+                console.log('Device change detected, checking device status...');
+                console.log('Current video device exists:', videoExists);
+                console.log('Current audio device exists:', audioExists);
+
+                // Look for our preferred devices in case they just became available
+                const preferredAudio = findPreferredAudioDevice(devices);
+                const preferredAudioId = preferredAudio?.deviceId;
+
+                const preferredVideo = findPreferredVideoDevice(devices);
+                const preferredVideoId = preferredVideo?.deviceId;
+
+                // Do we need to reload everything?
+                let needsFullReload = !videoExists || !audioExists;
+
+                // If we don't need a full reload, check if we should switch to preferred devices
+                if (!needsFullReload) {
+                    // Variables to track if we've made changes
+                    let audioChanged = false;
+                    let videoChanged = false;
+
+                    // Check if we should switch to a preferred audio device
+                    if (preferredAudioId && preferredAudioId !== currentAudioId) {
+                        const preferredAudioName = preferredAudio.label || 'Preferred audio device';
+                        updateStatus(`${preferredAudioName} connected, switching to it...`);
+
+                        // Update the audio dropdown
+                        const audioSelect = document.getElementById('audioSource');
+                        audioSelect.value = preferredAudioId;
+                        audioChanged = true;
+                    }
+
+                    // Check if we should switch to a preferred video device
+                    if (preferredVideoId && preferredVideoId !== currentVideoId) {
+                        const preferredVideoName = preferredVideo.label || 'Preferred video device';
+                        updateStatus(`${preferredVideoName} connected, switching to it...`);
+
+                        // Update the video dropdown
+                        const videoSelect = document.getElementById('videoSource');
+                        videoSelect.value = preferredVideoId;
+                        videoChanged = true;
+                    }
+
+                    // Update devices if needed
+                    if (videoChanged) {
+                        await updateDevice('video');
+                    }
+
+                    if (audioChanged) {
+                        await updateDevice('audio');
+                    }
+                } else {
+                    // Complete reload needed (device disconnected)
+                    updateStatus('Device disconnected, reloading devices...');
+                    await loadDevices();
+                }
+            } catch (error) {
+                updateStatus(`Error checking devices: ${error.message}`, true);
+                console.error('Device change error:', error);
+            }
+        });
+
+        function toggleAudioInput() {
+            const button = document.getElementById('micToggle');
+            isAudioInputEnabled = !isAudioInputEnabled;
+
+            if (isAudioInputEnabled) {
+                button.innerHTML = '<i data-lucide="mic"></i>';
+                button.classList.add('active');
+                // Enable audio tracks
+                if (mediaStream) {
+                    mediaStream.getAudioTracks().forEach(track => {
+                        track.enabled = true;
+                    });
+                }
+            } else {
+                button.innerHTML = '<i data-lucide="mic-off"></i>';
+                button.classList.remove('active');
+                // Disable audio tracks
+                if (mediaStream) {
+                    mediaStream.getAudioTracks().forEach(track => {
+                        track.enabled = false;
+                    });
+                }
+            }
+            lucide.createIcons();
+        }
+
+        function toggleAudioMonitor() {
+            const button = document.getElementById('monitorToggle');
+            const isMonitoring = button.classList.toggle('active');
+            const volume = document.getElementById('monitorVolume').value;
+
+            if (isMonitoring) {
+                button.innerHTML = '<i data-lucide="volume-2"></i>';
+                if (!audioContext || !audioMeter) {
+                    // If audio context or meter is not set up, try to set it up
+                    setupAudioMonitoring().then(() => {
+                        // After setup, apply the volume
+                        if (monitorGainNode && audioContext) {
+                            monitorGainNode.gain.setValueAtTime(volume / 100, audioContext.currentTime);
+                        }
+                    }).catch(error => {
+                        console.error('Failed to setup monitoring:', error);
+                        updateStatus('Failed to enable audio monitoring', true);
+                        button.classList.remove('active');
+                        button.innerHTML = '<i data-lucide="volume-x"></i>';
+                    });
+                } else if (monitorGainNode && audioContext) {
+                    // If already set up, just apply the volume
+                    monitorGainNode.gain.setValueAtTime(volume / 100, audioContext.currentTime);
+                }
+            } else {
+                button.innerHTML = '<i data-lucide="volume-x"></i>';
+                if (monitorGainNode && audioContext) {
+                    monitorGainNode.gain.setValueAtTime(0, audioContext.currentTime);
+                }
+            }
+            lucide.createIcons();
+        }
+
+        function updateMonitorVolume(value) {
+            document.getElementById('volumeValue').textContent = `${value}%`;
+            const monitorToggle = document.getElementById('monitorToggle');
+            if (monitorToggle.classList.contains('active') && monitorGainNode && audioContext) {
+                monitorGainNode.gain.setValueAtTime(value / 100, audioContext.currentTime);
+            }
+        }
+
+        // Add this function before setupAudioMonitoring
+
+        // Helper function to diagnose audio issues
+        async function validateAudioDevice(device) {
+            console.log(`Validating audio device: ${device.label || 'Unknown Device'}`);
+
+            try {
+                // Try to get a stream just for this device
+                const testStream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        deviceId: { exact: device.deviceId },
+                        // Use basic constraints for validation
+                        channelCount: 2
+                    },
+                    video: false
+                });
+
+                // Check if we got an audio track
+                const tracks = testStream.getAudioTracks();
+                if (tracks.length === 0) {
+                    console.warn(`Device ${device.label} provided no audio tracks`);
+                    testStream.getTracks().forEach(t => t.stop());
+                    return false;
+                }
+
+                // Check track settings
+                const settings = tracks[0].getSettings();
+                console.log(`Device ${device.label} settings:`, settings);
+
+                // Clean up
+                testStream.getTracks().forEach(t => t.stop());
+
+                return true;
+            } catch (error) {
+                console.error(`Device ${device.label} validation failed:`, error);
+                return false;
+            }
+        }
+
+        // Function to test an audio meter on a stream
+        async function testAudioMeter(stream) {
+            try {
+                // Create a temporary audio context and meter
+                const testContext = new (window.AudioContext || window.webkitAudioContext)();
+                await testContext.resume();
+
+                // Try to create an audio meter
+                const testMeter = new AudioMeter(testContext, stream);
+
+                // Try to get a level reading
+                const levels = testMeter.getLevel();
+                console.log('Test meter levels:', levels);
+
+                // Clean up
+                testMeter.disconnect();
+                await testContext.close();
+
+                return true;
+            } catch (error) {
+                console.error('Audio meter test failed:', error);
+                return false;
+            }
+        }
+
+        async function setupAudioMonitoring() {
+            console.log('[setupAudioMonitoring] Starting setup...'); // <-- Added
+            try {
+                // Clean up existing audio monitoring if needed
+                if (meterUpdateInterval) {
+                    console.log('[setupAudioMonitoring] Clearing meter interval.'); // <-- Added
+                    clearInterval(meterUpdateInterval);
+                    meterUpdateInterval = null;
+                }
+
+                if (audioMeter) {
+                    console.log('[setupAudioMonitoring] Disconnecting existing AudioMeter.'); // <-- Added
+                    audioMeter.disconnect();
+                    audioMeter = null;
+                }
+
+                if (monitorGainNode && audioContext) {
+                    console.log('[setupAudioMonitoring] Disconnecting existing monitorGainNode.'); // <-- Added
+                    monitorGainNode.disconnect();
+                    monitorGainNode = null;
+                }
+
+                // Close and recreate the audio context to ensure clean state
+                if (audioContext) {
+                    console.log('[setupAudioMonitoring] Closing existing AudioContext.'); // <-- Added
+                    try {
+                        await audioContext.close();
+                        console.log('[setupAudioMonitoring] Existing AudioContext closed.'); // <-- Added
+                    } catch (err) {
+                        console.error("[setupAudioMonitoring] Error closing previous audio context:", err);
+                    }
+                }
+
+                // Create new audio context
+                console.log('[setupAudioMonitoring] Creating new AudioContext.'); // <-- Added
+                audioContext = new (window.AudioContext || window.webkitAudioContext)({
+                    sampleRate: 48000,
+                    latencyHint: 'interactive'
+                });
+                console.log('[setupAudioMonitoring] New AudioContext created.'); // <-- Added
+
+                try {
+                    await audioContext.resume();
+                    console.log("[setupAudioMonitoring] Audio context resumed. State:", audioContext.state); // <-- Added
+                } catch (err) {
+                    console.error("[setupAudioMonitoring] Error resuming audio context:", err);
+                }
+
+                // Create new gain node
+                console.log('[setupAudioMonitoring] Creating monitorGainNode.'); // <-- Added
+                monitorGainNode = audioContext.createGain();
+                monitorGainNode.gain.value = 0; // Start muted
+                console.log('[setupAudioMonitoring] monitorGainNode created.'); // <-- Added
+
+                if (mediaStream && mediaStream.getAudioTracks().length > 0) {
+                    // Log which audio track we're using for monitoring
+                    const audioTrack = mediaStream.getAudioTracks()[0];
+                    console.log('[setupAudioMonitoring] Using audio track:', audioTrack.label, audioTrack.getSettings()); // <-- Added
+
+                    // Reset meter displays
+                    document.getElementById('meter-bar-left').style.width = '0%';
+                    document.getElementById('meter-bar-right').style.width = '0%';
+                    document.getElementById('meter-value-left').textContent = '-Inf dB';
+                    document.getElementById('meter-value-right').textContent = '-Inf dB';
+
+                    // Validate the current audio device
+                    const currentDeviceId = audioTrack.getSettings().deviceId;
+                    const devices = await navigator.mediaDevices.enumerateDevices();
+                    const currentDevice = devices.find(d => d.deviceId === currentDeviceId && d.kind === 'audioinput');
+
+                    if (currentDevice) {
+                        const isValid = await validateAudioDevice(currentDevice);
+                        if (!isValid) {
+                            updateStatus(`Warning: Audio device ${currentDevice.label} may have issues`, true);
+                        }
+                    }
+
+                    // Test if we can create an audio meter with this stream
+                    // console.log('[setupAudioMonitoring] Testing audio meter creation...'); // <-- Commented out test
+                    // const canCreateMeter = await testAudioMeter(new MediaStream([audioTrack]));
+                    // if (!canCreateMeter) {
+                    //     updateStatus('Warning: This audio device may not work with the audio meter', true);
+                    // }
+
+                    // Clone the stream for audio meter to avoid interference with the main stream
+                    console.log('[setupAudioMonitoring] Cloning stream for AudioMeter.'); // <-- Added
+                    const audioStreamForMeter = new MediaStream([audioTrack]);
+
+                    try {
+                        // Set up audio meter
+                        console.log('[setupAudioMonitoring] Creating AudioMeter instance...'); // <-- Added
+                        audioMeter = new AudioMeter(audioContext, audioStreamForMeter);
+                        console.log('[setupAudioMonitoring] AudioMeter instance created.'); // <-- Added
+
+                        // Set up monitoring path with a different stream instance to avoid issues
+                        console.log('[setupAudioMonitoring] Creating monitor stream source...'); // <-- Added
+                        const monitorStream = new MediaStream([audioTrack]);
+                        const source = audioContext.createMediaStreamSource(monitorStream);
+                        console.log('[setupAudioMonitoring] Connecting monitor source to gain node...'); // <-- Added
+                        source.connect(monitorGainNode);
+                        console.log('[setupAudioMonitoring] Connecting gain node to destination...'); // <-- Added
+                        monitorGainNode.connect(audioContext.destination);
+                        console.log('[setupAudioMonitoring] Monitor path connected.'); // <-- Added
+
+                        // Start meter updates
+                        console.log('[setupAudioMonitoring] Starting meter update interval.'); // <-- Added
+                        meterUpdateInterval = setInterval(updateAudioMeter, 33);
+
+                        console.log('[setupAudioMonitoring] Setup complete successfully.'); // <-- Added
+                        updateStatus(`Audio metering enabled for ${audioTrack.label}`);
+                    } catch (err) {
+                        console.error('[setupAudioMonitoring] Error during audio meter/monitor setup:', err); // <-- Modified log
+                        updateStatus(`Audio meter error: ${err.message}`, true);
+
+                        // // Try the fallback method for problematic devices -- KEEPING FALLBACK COMMENTED FOR NOW
+                        // try {
+                        //     console.log('Trying fallback method for audio metering');
+                        //     // Re-create audio context with different settings
+                        //     if (audioContext) {
+                        //         await audioContext.close();
+                        //     }
+                        //
+                        //     audioContext = new (window.AudioContext || window.webkitAudioContext)({
+                        //         latencyHint: 'playback'
+                        //     });
+                        //
+                        //     await audioContext.resume();
+                        //
+                        //     // Create a new MediaStream with just the audio track
+                        //     const fallbackStream = new MediaStream([audioTrack]);
+                        //     audioMeter = new AudioMeter(audioContext, fallbackStream);
+                        //
+                        //     // Set up monitoring with separate connections
+                        //     monitorGainNode = audioContext.createGain();
+                        //     monitorGainNode.gain.value = 0;
+                        //
+                        //     const fallbackMonitorStream = new MediaStream([audioTrack]);
+                        //     const fallbackSource = audioContext.createMediaStreamSource(fallbackMonitorStream);
+                        //     fallbackSource.connect(monitorGainNode);
+                        //     monitorGainNode.connect(audioContext.destination);
+                        //
+                        //     // Start meter updates
+                        //     meterUpdateInterval = setInterval(updateAudioMeter, 33);
+                        //
+                        //     console.log('Fallback audio monitoring setup complete');
+                        //     updateStatus(`Audio metering enabled using fallback method`);
+                        // } catch (fallbackErr) {
+                        //     console.error('Fallback audio meter setup failed:', fallbackErr);
+                        //     updateStatus(`Could not enable audio metering: ${fallbackErr.message}`, true);
+                        // }
+                    }
+                } else {
+                    console.warn('[setupAudioMonitoring] No audio track available in mediaStream.'); // <-- Added
+                    updateStatus('No audio track available for monitoring', true);
+                }
+            } catch (error) {
+                updateStatus(`[setupAudioMonitoring] Top-level error: ${error.message}`, true); // <-- Modified log
+                console.error('[setupAudioMonitoring] Top-level error:', error);
+            }
+        }
+
+        // Add this helper function before setupAudioMonitoring
+        function getResolutionConstraints() {
+            const resolution = document.getElementById('resolution').value;
+            const [width, height] = resolution.split('x').map(Number);
+            return {
+                width: { ideal: width },
+                height: { ideal: height }
+            };
+        }
+
+        // Add resolution change handler
+        document.getElementById('resolution').onchange = async () => {
+            if (mediaStream) {
+                await updateDevice('video');
+            }
+        };
+
+        async function updateAudioConstraints() {
+            if (!mediaStream) return;
+
+            const studioSound = document.getElementById('studioSound').checked;
+            const audioSource = document.getElementById('audioSource').value;
+            const videoSource = document.getElementById('videoSource').value;
+
+            // Check if we're currently using screen share with tab audio
+            const existingAudioTrack = mediaStream.getAudioTracks()[0];
+            const isScreenShareWithAudio = (videoSource === 'screen' &&
+                                          existingAudioTrack &&
+                                          existingAudioTrack.label &&
+                                          (existingAudioTrack.label.includes('screen') ||
+                                           existingAudioTrack.label.includes('tab'))) ||
+                                          // Also check if the user has selected "Screen Audio" from the dropdown
+                                          audioSource === 'screen-audio';
+
+            // If we're using screen share with tab audio, apply constraints directly to the track
+            if (isScreenShareWithAudio) {
+                try {
+                    console.log('Applying studio sound settings to screen share audio track');
+
+                    // Apply studio sound settings to the screen audio track if possible
+                    if (existingAudioTrack.applyConstraints) {
+                        try {
+                            const trackConstraints = {
+                                autoGainControl: !studioSound,
+                                echoCancellation: !studioSound,
+                                noiseSuppression: !studioSound
+                            };
+
+                            await existingAudioTrack.applyConstraints(trackConstraints);
+                            console.log('Applied constraints to screen audio track:', trackConstraints);
+                        } catch (constraintErr) {
+                            console.warn('Could not apply constraints to screen audio track:', constraintErr);
+                            // Continue anyway, this is an enhancement
+                        }
+                    }
+
+                    // Update audio monitoring
+                    if (audioMeter) {
+                        audioMeter.disconnect();
+                        audioMeter = null;
+                    }
+                    if (meterUpdateInterval) {
+                        clearInterval(meterUpdateInterval);
+                        meterUpdateInterval = null;
+                    }
+                    await setupAudioMonitoring();
+
+                    // Update the status text
+                    const status = document.getElementById('status');
+                    status.textContent = studioSound ?
+                        'Studio Sound: ON - Applied to tab audio' :
+                        'Studio Sound: OFF - Standard tab audio';
+                    status.style.color = studioSound ? 'var(--accent-green)' : 'var(--text-color)';
+
+                    return; // Exit early, we've handled the screen share audio case
+                } catch (error) {
+                    console.error('Error applying studio sound to screen audio:', error);
+                    // Continue to normal audio handling as fallback
+                }
+            }
+
+            // Normal microphone audio handling
+            const constraints = {
+                audio: {
+                    deviceId: audioSource ? { exact: audioSource } : undefined,
+                    autoGainControl: !studioSound,
+                    echoCancellation: !studioSound,
+                    noiseSuppression: !studioSound,
+                    channelCount: studioSound ? 2 : 1,
+                    sampleRate: studioSound ? 48000 : 44100,
+                    sampleSize: studioSound ? 24 : 16
+                }
+            };
+
+            try {
+                const newStream = await navigator.mediaDevices.getUserMedia(constraints);
+                const audioTrack = newStream.getAudioTracks()[0];
+
+                // <<< ADDED LOGGING HERE >>>
+                console.log('Got new audio track with ACTUAL settings:',
+                    audioTrack.label,
+                    audioTrack.getSettings()
+                );
+                // <<< END OF ADDED LOGGING >>>
+
+                // Replace the audio track in the existing stream
+                if (existingAudioTrack) {
+                    mediaStream.removeTrack(existingAudioTrack);
+                    existingAudioTrack.stop(); // Stop the old track
+                }
+                mediaStream.addTrack(audioTrack);
+
+                // Replace the track in the RTCPeerConnection if streaming
+                if (whipClient && whipClient.peerConnection?.connectionState === 'connected') {
+                     console.log('[updateAudioConstraints] Replacing track in PeerConnection...') // <-- Added
+                     await whipClient.replaceTrack(audioTrack);
+                }
+
+                // Update audio monitoring with the new track
+                console.log('[updateAudioConstraints] Calling setupAudioMonitoring...') // <-- Added
+                await setupAudioMonitoring();
+                console.log('[updateAudioConstraints] setupAudioMonitoring finished.') // <-- Added
+
+                 // Update the status text
+                const status = document.getElementById('status');
+                status.textContent = studioSound ?
+                    'Studio Sound: ON - High-quality audio mode' :
+                    'Studio Sound: OFF - Echo cancellation enabled';
+                status.style.color = studioSound ? 'var(--accent-green)' : 'var(--text-color)';
+            } catch (error) {
+                console.error('Error updating audio constraints:', error);
+                document.getElementById('status').textContent = 'Error updating audio settings: ' + error.message;
+            }
+        }
+
+        // Share link functionality
+        function shareLink() {
+            try {
+                const whipEndpoint = document.getElementById('whipEndpoint').value;
+
+                if (!whipEndpoint) {
+                    updateStatus('No WHIP endpoint to share.', true);
+                    return;
+                }
+
+                // Parse the URL to remove /whip at the end
+                let shareUrl = new URL(whipEndpoint);
+
+                // Remove segments that contain 'whip', 'publish', or other publishing-specific paths
+                let pathSegments = shareUrl.pathname.split('/').filter(segment =>
+                    !['whip', 'publish', 'stream'].includes(segment.toLowerCase()));
+
+                // Reconstruct URL with remaining path segments
+                shareUrl.pathname = pathSegments.join('/');
+
+                // Copy to clipboard
+                navigator.clipboard.writeText(shareUrl.toString())
+                    .then(() => {
+                        updateStatus('View link copied to clipboard: ' + shareUrl.toString());
+                    })
+                    .catch(err => {
+                        updateStatus('Failed to copy link: ' + err.message, true);
+                        console.error('Clipboard error:', err);
+                    });
+
+            } catch (error) {
+                updateStatus(`Error generating share link: ${error.message}`, true);
+                console.error('Share link error:', error);
+            }
+        }
+
+        // ADD THESE NEW FUNCTIONS
+        function setupRemoteControl() {
+            if (!roleId || !room) return;
+
+            console.log(`Setting up WebSocket connection for ${roleId} in room ${room}`);
+
+            // Setup WebSocket connection
+            setupWebSocket(room);
+
+            // Keep the old postMessage listener as fallback
+            window.addEventListener('message', handleRemoteCommand);
+
+            isRemoteControlled = true;
+        }
+
+        function setupWebSocket(room) {
+            console.log(`[Guest] Connecting to Socket.io for room: ${room}`);
+
+            wsConnection = io('wss://ws.voodoostudios.tv', {
+                transports: ['websocket'],
+                timeout: 20000,
+                forceNew: true
+            });
+
+            wsConnection.on('connect', () => {
+                console.log('[Guest] Socket.io connected successfully');
+
+                // Join room
+                wsConnection.emit('join-room', {
+                    room: room,
+                    role: 'streamer',
+                    participantId: roleId || guestId || 'default',
+                    participantName: guestId || roleId || 'Streamer'
+                });
+
+                // Register stream
+                wsConnection.emit('register-stream', {
+                    streamId: roleId || guestId || 'default',
+                    streamName: `${guestId || roleId || 'Streamer'}'s Stream`,
+                    status: 'ready'
+                });
+
+                // Send initial status
+                console.log('[Guest] Sending initial connected status');
+                sendStatusUpdate('connected');
+            });
+
+            wsConnection.on('connect_error', (error) => {
+                console.error('[Guest] Socket.io connection error:', error);
+                updateStatus(`Connection error: ${error.message}`, true);
+            });
+
+            // Listen for producer commands
+            wsConnection.on('producer-command', (data) => {
+                console.log('[Guest] Received producer command:', data);
+
+                if (data.streamId === (roleId || guestId)) {
+                    const command = {
+                        type: 'PRODUCER_COMMAND',
+                        command: data.command,
+                        target: roleId || guestId,
+                        muted: data.muted // Pass through the muted parameter
+                    };
+                    handleWebSocketCommand(command);
+                }
+            });
+
+            wsConnection.on('disconnect', () => {
+                console.log('Guest Socket.io disconnected');
+            });
+        }
+
+        function handleWebSocketCommand(command) {
+            console.log('Handling WebSocket command:', command);
+
+            switch (command.command) {
+                case 'START_STREAM':
+                    handleRemoteStart();
+                    break;
+                case 'STOP_STREAM':
+                    handleRemoteStop();
+                    break;
+                case 'MUTE_AUDIO':
+                    console.log('MUTE_AUDIO command received, muted:', command.muted);
+                    handleRemoteMute(command.muted);
+                    break;
+                case 'DEVICE_CHANGE':
+                    handleRemoteDeviceChange(command.data.deviceType, command.data.deviceId);
+                    break;
+                case 'END_SESSION':
+                    handleEndSession();
+                    break;
+                case 'ACCEPT_RECONNECT':
+                    handleReconnectAccepted();
+                    break;
+                case 'DECLINE_RECONNECT':
+                    handleReconnectDeclined();
+                    break;
+            }
+        }
+
+        function handleRemoteMute(muted) {
+            console.log(`Remote mute command: ${muted}`);
+
+            if (mediaStream) {
+                mediaStream.getAudioTracks().forEach(track => {
+                    track.enabled = !muted;
+                });
+
+                // Update UI
+                const button = document.getElementById('micToggle');
+                if (button) {
+                    isAudioInputEnabled = !muted;
+                    if (isAudioInputEnabled) {
+                        button.innerHTML = '<i data-lucide="mic"></i>';
+                        button.classList.add('active');
+                    } else {
+                        button.innerHTML = '<i data-lucide="mic-off"></i>';
+                        button.classList.remove('active');
+                    }
+                    lucide.createIcons();
+                }
+
+                // Send status back to producer
+                if (wsConnection && wsConnection.connected) {
+                    wsConnection.emit('mute-status-update', {
+                        streamId: roleId || guestId,
+                        muted: muted
+                    });
+                }
+            }
+        }
+
+        function handleRemoteCommand(event) {
+            if (event.origin !== window.location.origin) return;
+
+            const command = event.data;
+            if (command.target !== roleId) return;
+
+            switch (command.type) {
+                case 'START_STREAM':
+                    handleRemoteStart();
+                    break;
+                case 'STOP_STREAM':
+                    handleRemoteStop();
+                    break;
+                case 'DEVICE_CHANGE':
+                    handleRemoteDeviceChange(command.deviceType, command.deviceId);
+                    break;
+            }
+        }
+
+        async function handleRemoteStart() {
+            updateStatus('Producer is starting your stream...');
+
+            try {
+                await startStreaming();
+                sendStatusUpdate('streaming');
+            } catch (error) {
+                console.error('Remote start failed:', error);
+                sendStatusUpdate('error', error.message);
+            }
+        }
+
+        async function handleRemoteStop() {
+            updateStatus('Producer is stopping your stream...');
+
+            try {
+                await stopStreaming();
+                sendStatusUpdate('stopped');
+            } catch (error) {
+                console.error('Remote stop failed:', error);
+                sendStatusUpdate('error', error.message);
+            }
+        }
+
+        function sendStatusUpdate(status, message = '') {
+            console.log(`[Guest] sendStatusUpdate called: ${status}`);
+
+            const statusData = {
+                roleId: roleId,
+                guestId: guestId,
+                status: status,
+                message: message,
+                timestamp: Date.now()
+            };
+
+            console.log('[Guest] Sending status update:', statusData);
+
+            // Always send via Socket.io if connected
+            if (wsConnection && wsConnection.connected) {
+                // Send stream status update
+                wsConnection.emit('stream-status', {
+                    streamId: roleId || guestId || 'default',
+                    status: status
+                });
+                console.log('Status update sent via Socket.io:', statusData);
+            }
+
+            // Also send via postMessage if remote controlled
+            if (isRemoteControlled) {
+                window.parent.postMessage({
+                    type: 'GUEST_STATUS_UPDATE',
+                    data: statusData
+                }, '*');
+                window.parent.postMessage({
+                    type: 'STREAM_STATUS_UPDATE',
+                    data: {
+                        streamId: roleId, // Use roleId as streamId for dynamic system
+                        status: status,
+                        message: message
+                    }
+                }, '*');
+                console.log('Status update sent via postMessage:', statusData);
+            }
+        }
+
+        function updateGuestInterface() {
+            if (!roleId || !guestId) return;
+
+            // Add role header
+            const roleHeader = document.createElement('div');
+            roleHeader.style.cssText = `
+                background: var(--bg-lighter);
+                padding: 12px;
+                border-radius: 8px;
+                border: 1px solid var(--border-color);
+                margin-bottom: 16px;
+                text-align: center;
+            `;
+
+            roleHeader.innerHTML = `
+                <div style="color: var(--accent-cyan); font-weight: 600; margin-bottom: 4px;">
+                    ${roleId.toUpperCase()}
+                </div>
+                <div style="font-size: 14px; opacity: 0.8;">
+                    Hi ${guestId}! You're ready to broadcast.
+                </div>
+            `;
+
+            // Insert after logo
+            const logoContainer = document.querySelector('.logo-container');
+            if (logoContainer && logoContainer.nextElementSibling) {
+                logoContainer.parentNode.insertBefore(roleHeader, logoContainer.nextElementSibling);
+            }
+
+            // Add remote control indicator
+            if (isRemoteControlled) {
+                const remoteIndicator = document.createElement('div');
+                remoteIndicator.style.cssText = `
+                    background: rgba(122, 162, 247, 0.1);
+                    border: 1px solid var(--accent-blue);
+                    padding: 8px 12px;
+                    border-radius: 6px;
+                    margin-bottom: 12px;
+                    font-size: 12px;
+                    text-align: center;
+                    color: var(--accent-blue);
+                `;
+                remoteIndicator.innerHTML = '<i data-lucide="settings"></i> Producer can control your stream remotely';
+
+                roleHeader.appendChild(remoteIndicator);
+
+                // Initialize the icon
+                if (typeof lucide !== 'undefined') {
+                    lucide.createIcons();
+                }
+            }
+        }
+
+        // Message handling for producer commands
+        window.addEventListener('message', async function(event) {
+            console.log('Guest received message:', event.data);
+            console.log('Current roleId:', roleId, 'currentRole:', currentRole);
+
+            // Handle producer commands
+            if (event.data && event.data.type === 'PRODUCER_COMMAND') {
+                const { target, command, data } = event.data;
+
+                console.log(`Checking if command is for us: target=${target}, roleId=${roleId}, currentRole=${currentRole}`);
+
+                // Check if this command is for us
+                if (target === roleId || target === currentRole) {
+                    console.log('Processing producer command:', command);
+
+                    switch (command) {
+                        case 'START_STREAM':
+                            console.log('START_STREAM command received');
+                            // Check if we have a WHIP endpoint
+                            const whipInput = document.getElementById('whipEndpoint');
+                            if (!whipInput || !whipInput.value) {
+                                console.error('No WHIP endpoint configured');
+                                sendStatusUpdate('error', 'No WHIP endpoint configured');
+                                break;
+                            }
+
+                            // Auto-start streaming
+                            const stopButton = document.getElementById('stopButton');
+                            if (stopButton && !stopButton.disabled) {
+                                console.log('Stop button is enabled, stream is already active');
+                                sendStatusUpdate('streaming', 'Already streaming');
+                            } else {
+                                console.log('Starting stream...');
+                                await startStreaming();
+                            }
+                            break;
+
+                        case 'STOP_STREAM':
+                            // Stop streaming
+                            if (document.getElementById('stopButton').disabled === false) {
+                                // Stream is currently active
+                                await stopStreaming();
+                            }
+                            break;
+
+                        case 'UPDATE_SETTINGS':
+                            // Update settings if provided
+                            if (data.videoBitrate) {
+                                document.getElementById('videoBitrate').value = data.videoBitrate;
+                            }
+                            if (data.audioInputEnabled !== undefined) {
+                                isAudioInputEnabled = data.audioInputEnabled;
+                                // Update UI
+                                const audioToggle = document.getElementById('audioToggle');
+                                if (audioToggle) {
+                                    audioToggle.checked = isAudioInputEnabled;
+                                }
+                            }
+                            break;
+                    }
+                }
+            }
+        });
+
+        // Remove duplicate sendStatusUpdate function - we already have one above
+
+        // Send initial connection status when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            // Delay to ensure producer is ready
+            setTimeout(() => {
+                console.log('Sending initial connection status. roleId:', roleId, 'currentRole:', currentRole);
+                if (roleId || currentRole) {
+                    sendStatusUpdate('connected');
+                } else {
+                    console.warn('No role detected, not sending connection status');
+                }
+            }, 2000); // Increased delay to ensure everything is loaded
+        });
+
+        // Update current role when WHIP endpoint changes
+        const whipEndpointInput = document.getElementById('whipEndpoint');
+        if (whipEndpointInput) {
+            whipEndpointInput.addEventListener('change', function() {
+                const endpoint = this.value;
+                // Extract role from endpoint (e.g., /therollup/host1/whip -> host1)
+                const match = endpoint.match(/\/([^\/]+)\/whip$/);
+                if (match) {
+                    currentRole = match[1];
+                    console.log('Detected role from WHIP endpoint:', currentRole);
+                }
+            });
+        }
+
+        // Session ended state management
+        let sessionEnded = false;
+        let reconnectRequested = false;
+
+        function handleStartStreaming() {
+            if (sessionEnded) {
+                updateStatus('Session has ended. Please wait for producer approval.', true);
+                showSessionEndedUI();
+                return;
+            }
+            startStreaming();
+        }
+
+        function handleEndSession() {
+            console.log('Session ended by producer');
+            sessionEnded = true;
+            
+            // Stop streaming if active
+            if (whipClient) {
+                stopStreaming();
+            }
+            
+            // Show session ended UI
+            showSessionEndedUI();
+        }
+
+        function showSessionEndedUI() {
+            // Create overlay
+            const overlay = document.createElement('div');
+            overlay.id = 'session-ended-overlay';
+            overlay.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: var(--bg-color);
+                z-index: 9999;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                padding: 20px;
+            `;
+            
+            overlay.innerHTML = `
+                <svg width="180" height="45" viewBox="0 0 331 83" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-bottom: 30px; opacity: 0.8;">
+                    <g clip-path="url(#clip0_1_3)">
+                        <path d="M144.647 28.9283L144.14 28.5155C141.004 25.541 136.845 23.8847 132.521 23.8889C129.301 23.8623 126.107 24.4752 123.125 25.6919C120.144 26.9087 117.433 28.705 115.152 30.9768C114.163 31.9978 113.259 33.097 112.448 34.2638C111.606 33.0538 110.659 31.9201 109.619 30.8756C107.347 28.5906 104.638 26.7857 101.654 25.568C98.6703 24.3504 95.4718 23.7449 92.249 23.7876C85.7279 23.7979 79.465 26.336 74.778 30.8678C73.9056 31.7735 73.1008 32.7419 72.3701 33.7653C71.621 32.7408 70.7979 31.7724 69.9076 30.8678C67.6356 28.5828 64.927 26.7779 61.9431 25.5602C58.9591 24.3426 55.7607 23.7371 52.5379 23.7798C51.4587 23.7909 50.3813 23.869 49.3117 24.0135L42.5711 40.6118C43.7127 39.0337 45.2096 37.7461 46.941 36.8531C48.6724 35.9601 50.5896 35.4867 52.5379 35.4711C55.0907 35.4092 57.6042 36.1089 59.7574 37.4811C61.9107 38.8532 63.6061 40.8355 64.6273 43.1749C65.6485 45.5143 65.9492 48.1048 65.4911 50.6159C65.0329 53.1269 63.8366 55.4445 62.0549 57.273C60.2732 59.1014 57.9868 60.3579 55.4876 60.8819C52.9884 61.4059 50.3897 61.1737 48.023 60.215C45.6564 59.2563 43.6292 57.6145 42.2001 55.4992C40.7711 53.3839 40.005 50.8909 39.9996 48.3385C40.0169 47.7356 40.0742 47.1346 40.171 46.5393L33.2278 63.6751C35.4771 66.6489 38.4004 69.0468 41.7573 70.6716C45.1142 72.2965 48.8089 73.102 52.5379 73.0219C55.7655 73.0302 58.9627 72.3984 61.9442 71.163C64.9258 69.9276 67.6325 68.1132 69.9076 65.8248C70.807 64.9187 71.6355 63.9448 72.3857 62.9117C73.1149 63.9368 73.9143 64.9101 74.778 65.8248C79.4569 70.3835 85.7153 72.9616 92.249 73.0219C95.4766 73.0302 98.6738 72.3984 101.655 71.163C104.637 69.9276 107.344 68.1132 109.619 65.8248C110.659 64.783 111.606 63.6519 112.448 62.4444C113.261 63.6072 114.165 64.7037 115.152 65.7236C119.781 70.2818 126.023 72.8291 132.521 72.8116C136.223 72.8116 140.439 72.2975 144.14 68.699L144.647 68.1927V71.8925H157.115V15.687H144.647V28.9283ZM92.249 61.1904C89.6993 61.2306 87.1953 60.5116 85.0556 59.1249C82.9159 57.7382 81.2374 55.7466 80.2337 53.4035C79.23 51.0603 78.9464 48.4717 79.4191 45.967C79.8918 43.4623 81.0994 41.1548 82.8882 39.3382C84.677 37.5217 86.966 36.2781 89.4641 35.7659C91.9621 35.2537 94.5561 35.4959 96.916 36.4618C99.2758 37.4277 101.295 39.0736 102.716 41.1899C104.137 43.3063 104.896 45.7974 104.896 48.3463C104.912 50.0199 104.597 51.6801 103.969 53.2317C103.341 54.7834 102.413 56.1959 101.238 57.3884C100.063 58.5809 98.6646 59.5298 97.122 60.1809C95.5794 60.832 93.9235 61.1724 92.249 61.1826V61.1904ZM132.521 60.7776C125.944 60.7776 120.388 55.1305 120.388 48.3152C120.388 41.4998 125.944 35.8528 132.521 35.8528C139.098 35.8528 144.647 41.601 144.647 48.3152C144.647 55.0293 139.098 60.7698 132.521 60.7698V60.7776Z" fill="white" opacity="0.6"/>
+                        <path d="M35.4722 15.687L20.3857 52.9574L13.2632 35.5646H0.000183105L14.7282 71.8691H26.0353L48.8365 15.687H35.4722Z" fill="white" opacity="0.6"/>
+                        <path d="M225.238 30.8678C222.965 28.5836 220.257 26.7791 217.273 25.5615C214.289 24.3439 211.091 23.738 207.868 23.7798C201.343 23.791 195.077 26.332 190.389 30.8678C189.945 31.3196 189.54 31.8025 189.135 32.2854C188.722 31.8025 188.309 31.3274 187.857 30.8678C185.583 28.5833 182.873 26.7788 179.888 25.5612C176.902 24.3436 173.703 23.7378 170.479 23.7798C167.081 23.7753 163.718 24.4672 160.598 25.8127V40.5262C161.743 38.9797 163.231 37.7202 164.946 36.847C166.66 35.9738 168.555 35.5108 170.479 35.4945C173.889 35.4945 177.16 36.8485 179.571 39.2587C181.982 41.6689 183.337 44.9378 183.337 48.3463C183.337 51.7548 181.982 55.0238 179.571 57.4339C177.16 59.8441 173.889 61.1982 170.479 61.1982C168.554 61.1822 166.659 60.7185 164.944 59.8438C163.229 58.9691 161.741 57.7075 160.598 56.1587V70.8877C163.71 72.2705 167.074 72.9945 170.479 73.0141C173.708 73.0217 176.906 72.3896 179.889 71.1543C182.871 69.919 185.58 68.1049 187.857 65.817C188.309 65.3653 188.729 64.8824 189.15 64.3994C189.548 64.8824 189.93 65.3653 190.389 65.817C195.071 70.3762 201.332 72.9542 207.868 73.0141C212.753 73.017 217.529 71.5689 221.589 68.8537C225.649 66.1385 228.81 62.2787 230.672 57.7642C232.533 53.2497 233.01 48.2843 232.043 43.4982C231.075 38.7122 228.707 34.3214 225.238 30.8834V30.8678ZM207.868 61.1826C205.318 61.2259 202.812 60.5095 200.671 59.1248C198.529 57.74 196.848 55.7495 195.842 53.4067C194.836 51.0639 194.55 48.4748 195.021 45.9691C195.492 43.4634 196.698 41.1545 198.486 39.3364C200.274 37.5182 202.563 36.2731 205.062 35.7596C207.56 35.246 210.155 35.4873 212.516 36.4527C214.876 37.4181 216.896 39.0639 218.318 41.1806C219.74 43.2973 220.5 45.789 220.5 48.3385C220.515 50.0112 220.201 51.6705 219.574 53.2216C218.947 54.7726 218.021 56.185 216.848 57.3779C215.675 58.5708 214.278 59.5208 212.737 60.1737C211.196 60.8265 209.542 61.1693 207.868 61.1826V61.1826Z" fill="white" opacity="0.6"/>
+                    </g>
+                    <path d="M244.721 68V25.7246H261.01C269.564 25.7246 275.395 31.3789 275.395 39.8457V39.9043C275.395 48.3418 269.564 54.0254 261.01 54.0254H252.279V68H244.721ZM259.135 31.9062H252.279V47.9316H259.135C264.555 47.9316 267.719 45.002 267.719 39.9336V39.875C267.719 34.8066 264.555 31.9062 259.135 31.9062ZM280.199 68V36.9453H287.494V42.3066H287.641C288.607 38.5566 291.186 36.3008 294.76 36.3008C295.668 36.3008 296.518 36.4473 297.074 36.5938V43.1855C296.459 42.9512 295.346 42.7754 294.115 42.7754C289.984 42.7754 287.494 45.3828 287.494 49.9824V68H280.199ZM313.393 68.6152C304.252 68.6152 298.363 62.5215 298.363 52.4727V52.4141C298.363 42.4531 304.34 36.3008 313.363 36.3008C322.416 36.3008 328.422 42.3945 328.422 52.4141V52.4727C328.422 62.5508 322.504 68.6152 313.393 68.6152ZM313.422 62.7266C318.021 62.7266 320.98 58.9766 320.98 52.4727V52.4141C320.98 45.9395 317.992 42.2188 313.363 42.2188C308.822 42.2188 305.805 45.9688 305.805 52.4141V52.4727C305.805 59.0059 308.764 62.7266 313.422 62.7266Z" fill="white" opacity="0.6"/>
+                    <defs>
+                        <clipPath id="clip0_1_3">
+                            <rect width="232.532" height="72.9985" fill="white"/>
+                        </clipPath>
+                    </defs>
+                </svg>
+                <h1 style="color: var(--text-color); font-size: 32px; margin-bottom: 20px;">Session Ended</h1>
+                <p style="color: var(--text-color); opacity: 0.7; margin-bottom: 30px; text-align: center;">The producer has ended this streaming session.</p>
+                <p style="color: var(--text-color); opacity: 0.5; font-size: 14px; text-align: center;">Please refresh the page to reconnect.</p>
+            `;
+            
+            document.body.appendChild(overlay);
+        }
+
+    </script>
+
+    <script>
+        // Add PiP functionality script block
+        const videoPreview = document.getElementById('videoPreview');
+        const pipButton = document.getElementById('pipButton');
+
+        if ('pictureInPictureEnabled' in document && pipButton) {
+            // Show the button only if PiP is supported and button exists
+            pipButton.style.display = 'inline-block';
+
+            videoPreview.addEventListener('enterpictureinpicture', () => {
+                if (pipButton) {
+                    pipButton.innerHTML = '<i data-lucide="picture-in-picture" style="vertical-align: middle;"></i> Exit PiP';
+                    lucide.createIcons();
+                }
+            });
+
+            videoPreview.addEventListener('leavepictureinpicture', () => {
+                if (pipButton) {
+                    pipButton.innerHTML = '<i data-lucide="picture-in-picture-2" style="vertical-align: middle;"></i> PiP';
+                    lucide.createIcons();
+                }
+            });
+        } else {
+             console.log('Picture-in-Picture is not supported in this browser or pipButton not found.');
+             // Optionally hide or disable the button explicitly if needed
+             // if (pipButton) pipButton.style.display = 'none';
+        }
+
+        async function togglePictureInPicture() {
+            if (!document.pictureInPictureEnabled) {
+                updateStatus('Picture-in-Picture is not supported.', true);
+                return;
+            }
+
+            if (pipButton) pipButton.disabled = true; // Disable button during transition
+
+            try {
+                if (document.pictureInPictureElement) {
+                    await document.exitPictureInPicture();
+                } else {
+                    await videoPreview.requestPictureInPicture();
+                }
+            } catch (error) {
+                updateStatus(`PiP Error: ${error.message}`, true);
+                console.error('PiP Error:', error);
+            } finally {
+                 if (pipButton) pipButton.disabled = false; // Re-enable button
+            }
+        }
+    </script>
+
+</body>
+</html>

@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voodoo Streamer - Standalone</title>
+    <link rel="stylesheet" href="css/main.css">
+    <link rel="stylesheet" href="css/components.css">
+    <link rel="stylesheet" href="css/standalone.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lucide-static@0.321.0/font/lucide.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/lucide@0.321.0/dist/umd/lucide.min.js"></script>
+</head>
+<body>
+    <div class="app-container standalone-mode">
+        <!-- License Login Screen -->
+        <div id="licenseScreen" class="license-screen">
+            <div class="license-form">
+                <h1>Voodoo Streamer</h1>
+                <p>Enter your license key to start streaming</p>
+                <form id="licenseForm">
+                    <input 
+                        type="text" 
+                        id="licenseInput" 
+                        placeholder="VS-XXXX-XXXX" 
+                        class="license-input"
+                        autocomplete="off"
+                        required
+                    >
+                    <button type="submit" class="license-submit">
+                        <span>Activate Stream</span>
+                        <i data-lucide="arrow-right"></i>
+                    </button>
+                </form>
+                <div id="licenseError" class="error-message"></div>
+            </div>
+        </div>
+
+        <!-- Main Streaming Interface -->
+        <div id="streamInterface" class="stream-interface" style="display: none;">
+            <!-- Header -->
+            <header class="app-header">
+                <div class="header-left">
+                    <h1>Voodoo Streamer</h1>
+                    <div class="connection-status" id="connectionStatus">
+                        <span class="status-dot"></span>
+                        <span class="status-text">Initializing...</span>
+                    </div>
+                </div>
+                <div class="header-right">
+                    <div class="license-info">
+                        <span class="license-key" id="licenseKey"></span>
+                        <span class="license-expiry" id="licenseExpiry"></span>
+                    </div>
+                    <button class="icon-button" id="settingsBtn">
+                        <i data-lucide="settings"></i>
+                    </button>
+                    <button class="icon-button" id="logoutBtn">
+                        <i data-lucide="log-out"></i>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Main Content -->
+            <main class="app-main">
+                <!-- Video Preview -->
+                <div class="video-section">
+                    <div class="video-container">
+                        <video id="localVideo" autoplay muted playsinline></video>
+                        <div class="video-overlay" id="videoOverlay">
+                            <button class="start-stream-btn" id="startStreamBtn">
+                                <i data-lucide="radio"></i>
+                                <span>Start Streaming</span>
+                            </button>
+                        </div>
+                        <div class="streaming-indicator" id="streamingIndicator">
+                            <span class="pulse"></span>
+                            <span>LIVE</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Controls -->
+                <div class="controls-section">
+                    <!-- Device Selection -->
+                    <div class="control-group">
+                        <label>Camera</label>
+                        <select id="videoSelect" class="device-select">
+                            <option value="">Select Camera</option>
+                        </select>
+                    </div>
+
+                    <div class="control-group">
+                        <label>Microphone</label>
+                        <select id="audioSelect" class="device-select">
+                            <option value="">Select Microphone</option>
+                        </select>
+                    </div>
+
+                    <!-- Stream Controls -->
+                    <div class="stream-controls">
+                        <button class="control-button" id="toggleVideo">
+                            <i data-lucide="video"></i>
+                            <span>Video</span>
+                        </button>
+                        <button class="control-button" id="toggleAudio">
+                            <i data-lucide="mic"></i>
+                            <span>Audio</span>
+                        </button>
+                        <button class="control-button danger" id="stopStreamBtn" disabled>
+                            <i data-lucide="square"></i>
+                            <span>Stop Stream</span>
+                        </button>
+                    </div>
+
+                    <!-- Audio Meter -->
+                    <div class="audio-meter-container">
+                        <label>Audio Level</label>
+                        <div class="audio-meter" id="audioMeter">
+                            <div class="audio-meter-bar"></div>
+                        </div>
+                    </div>
+
+                    <!-- Stream Info -->
+                    <div class="stream-info" id="streamInfo">
+                        <div class="info-item">
+                            <span class="info-label">Endpoint:</span>
+                            <span class="info-value" id="endpointInfo">-</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Bitrate:</span>
+                            <span class="info-value" id="bitrateInfo">-</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Duration:</span>
+                            <span class="info-value" id="durationInfo">00:00:00</span>
+                        </div>
+                    </div>
+                </div>
+            </main>
+
+            <!-- Settings Modal -->
+            <div id="settingsModal" class="modal" style="display: none;">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2>Stream Settings</h2>
+                        <button class="close-button" id="closeSettings">
+                            <i data-lucide="x"></i>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="setting-group">
+                            <label>Video Quality</label>
+                            <select id="qualitySelect">
+                                <option value="low">Low (480p)</option>
+                                <option value="medium" selected>Medium (720p)</option>
+                                <option value="high">High (1080p)</option>
+                            </select>
+                        </div>
+                        <div class="setting-group">
+                            <label>Max Bitrate</label>
+                            <input type="range" id="bitrateSlider" min="500" max="5000" value="2500" step="100">
+                            <span id="bitrateValue">2500 kbps</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/utils.js"></script>
+    <script src="js/device-manager.js"></script>
+    <script src="js/audio-manager.js"></script>
+    <script src="js/standalone-app.js"></script>
+</body>
+</html>

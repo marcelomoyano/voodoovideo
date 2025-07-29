@@ -1,0 +1,449 @@
+:root {
+    --bg-color: #1a1b26;
+    --bg-lighter: #24283b;
+    --text-color: #a9b1d6;
+    --accent-blue: #7aa2f7;
+    --accent-cyan: #7dcfff;
+    --accent-purple: #6B46C1;
+    --accent-green: #9ece6a;
+    --accent-red: #f7768e;
+    --accent-orange: #ff9e64;
+    --border-color: #292e42;
+    --button-hover: #3b4261;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    -webkit-tap-highlight-color: transparent;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg-color);
+    color: var(--text-color);
+    padding: 20px;
+    min-height: 100vh;
+    margin: 0;
+}
+
+.header {
+    text-align: center;
+    margin-bottom: 30px;
+    background: var(--bg-lighter);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 20px;
+    position: relative;
+}
+
+.header h1 {
+    color: var(--accent-blue);
+    margin-bottom: 10px;
+    font-size: 24px;
+    font-weight: 600;
+}
+
+.connection-status {
+    display: inline-block;
+    padding: 6px 16px;
+    background: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.connection-status:hover {
+    background: var(--button-hover);
+}
+
+.connection-status.connected {
+    background: var(--accent-green);
+    color: var(--bg-color);
+    border-color: var(--accent-green);
+}
+
+.connection-status.connected:hover {
+    background: #7fb069;
+}
+
+.room-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 15px;
+    justify-content: center;
+}
+
+.room-input {
+    padding: 8px 16px;
+    background: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-color);
+    font-size: 14px;
+    width: 200px;
+    transition: all 0.3s ease;
+}
+
+.room-input:focus {
+    outline: none;
+    border-color: var(--accent-blue);
+}
+
+.invite-section {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border-color);
+    display: none;
+}
+
+.invite-section.active {
+    display: block;
+}
+
+.invite-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    justify-content: center;
+    margin-top: 10px;
+}
+
+.invite-label {
+    font-size: 14px;
+    color: var(--text-color);
+    margin-bottom: 5px;
+    text-align: center;
+}
+
+.invite-btn {
+    padding: 8px 20px;
+    background: var(--accent-cyan);
+    color: var(--bg-color);
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+.invite-btn:hover {
+    background: #5fb3e3;
+}
+
+.invite-btn.copied {
+    background: var(--accent-green);
+}
+
+.guest-invite-btn {
+    background: var(--accent-orange);
+    margin-left: 10px;
+}
+
+.guest-invite-btn:hover {
+    background: #e8873e;
+}
+
+.guest-invite-btn.copied {
+    background: var(--accent-green);
+}
+
+.streams-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: 25px;
+    margin-top: 30px;
+}
+
+.stream-card {
+    background: var(--bg-lighter);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 20px;
+    transition: all 0.3s ease;
+}
+
+.stream-card:hover {
+    border-color: var(--accent-blue);
+}
+
+.stream-card.active {
+    border-color: var(--accent-green);
+    box-shadow: 0 0 0 1px var(--accent-green);
+}
+
+.stream-card.screen-sharing {
+    background: linear-gradient(135deg, var(--bg-lighter) 0%, rgba(122, 162, 247, 0.1) 100%);
+    border-color: var(--accent-blue);
+}
+
+.stream-card.screen-sharing .stream-name::before {
+    content: '[Screen] ';
+    margin-right: 4px;
+}
+
+.device-info {
+    margin-top: 10px;
+    padding: 8px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 6px;
+    font-size: 12px;
+    opacity: 0.9;
+}
+
+.video-device-info {
+    color: var(--accent-cyan);
+    font-size: 11px;
+    opacity: 0.8;
+    margin-top: 4px;
+}
+
+.stream-name {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 10px;
+    color: var(--accent-cyan);
+}
+
+.stream-status {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    margin-bottom: 15px;
+}
+
+.stream-status.ready {
+    background: var(--accent-blue);
+    color: var(--bg-color);
+}
+
+.stream-status.streaming {
+    background: var(--accent-green);
+    color: var(--bg-color);
+}
+
+.stream-status.stopped {
+    background: var(--accent-red);
+    color: var(--bg-color);
+}
+
+.stream-controls {
+    display: flex;
+    gap: 10px;
+}
+
+.stream-controls button {
+    flex: 1;
+    padding: 12px 16px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+.start-btn {
+    background: var(--accent-green);
+    color: var(--bg-color);
+}
+
+.start-btn:hover {
+    background: #7fb069;
+}
+
+.stop-btn {
+    background: var(--accent-red);
+    color: var(--bg-color);
+}
+
+.stop-btn:hover {
+    background: #f56565;
+}
+
+.mute-btn {
+    background: var(--accent-orange);
+    color: var(--bg-color);
+    min-width: 50px;
+}
+
+.mute-btn:hover {
+    background: #ed8936;
+}
+
+.mute-btn.muted {
+    background: var(--accent-red);
+}
+
+.obs-btn {
+    background: var(--accent-purple);
+    color: var(--bg-color);
+    min-width: 50px;
+}
+
+.obs-btn:hover {
+    background: #553C9A;
+}
+
+.obs-btn.active {
+    background: var(--accent-cyan);
+    color: var(--bg-color);
+}
+
+.close-btn {
+    background: var(--bg-lighter);
+    color: var(--accent-red);
+    border: 1px solid var(--accent-red);
+    min-width: 60px;
+    font-weight: 600;
+    position: relative;
+}
+
+.close-btn:hover {
+    background: var(--accent-red);
+    color: white;
+    transform: scale(1.05);
+    box-shadow: 0 2px 8px rgba(247, 118, 142, 0.3);
+}
+
+.close-btn:active {
+    transform: scale(0.95);
+}
+
+.close-btn svg {
+    transition: transform 0.2s ease;
+}
+
+.close-btn:hover svg {
+    transform: rotate(90deg);
+}
+
+.stream-preview {
+    width: 100%;
+    height: 180px;
+    background: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    margin: 10px 0;
+    position: relative;
+    overflow: hidden;
+    display: none;
+}
+
+.stream-preview video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.audio-meter {
+    background: var(--bg-lighter);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 12px;
+    border: 1px solid var(--border-color);
+}
+
+.stereo-meters {
+    display: grid;
+    gap: 16px;
+    margin-bottom: 8px;
+}
+
+.meter-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-size: 14px;
+    color: var(--text-color);
+}
+
+.meter-container {
+    position: relative;
+    height: 24px;
+    background: var(--bg-color);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.meter-bar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--accent-green) 0%, var(--accent-cyan) 100%);
+    transition: width 0.1s ease-out;
+}
+
+.meter-value {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-color);
+}
+
+.stream-preview.active {
+    display: block;
+}
+
+.start-btn {
+    background: #7aa2f7;
+    color: white;
+}
+
+.stop-btn {
+    background: #f7768e;
+    color: white;
+}
+
+button:hover {
+    opacity: 0.8;
+}
+
+button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 60px;
+    color: #565f89;
+}
+
+.log {
+    margin-top: 30px;
+    width: 100%;
+    max-height: 150px;
+    background: var(--bg-lighter);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 15px;
+    font-size: 12px;
+    font-family: monospace;
+    overflow-y: auto;
+    color: var(--text-color);
+}
+
+@media (max-width: 768px) {
+    .streams-container {
+        grid-template-columns: 1fr;
+    }
+
+    body {
+        padding: 10px;
+    }
+}

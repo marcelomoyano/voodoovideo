@@ -159,6 +159,7 @@ struct ContentView: View {
 
                         Spacer()
 
+                        streamingControls
                         recordingControls
                     }
                     .frame(width: 350)
@@ -439,6 +440,152 @@ struct ContentView: View {
             .padding(.horizontal, 10)
             .padding(.top, 4)
         }
+    }
+    
+    // Streaming Controls
+    private var streamingControls: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("WHIP Streaming")
+                .font(.headline)
+                .padding(.horizontal, 10)
+                .foregroundColor(.white)
+            
+            // Streaming Status
+            HStack {
+                Circle()
+                    .fill(videoPreviewManager.isStreaming ? Color.blue : Color.gray)
+                    .frame(width: 8, height: 8)
+                
+                Text(videoPreviewManager.isStreaming ? "STREAMING" : "READY")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(videoPreviewManager.isStreaming ? .blue : .gray)
+                
+                Spacer()
+                
+                Text(videoPreviewManager.streamStatus)
+                    .font(.system(size: 12))
+                    .foregroundColor(.white)
+            }
+            .padding(.horizontal, 10)
+            
+            // WHIP Endpoint Configuration
+            VStack(alignment: .leading, spacing: 4) {
+                Text("WHIP Endpoint")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+                    .padding(.horizontal, 10)
+                
+                TextField("https://stream.voodoostudios.tv/room/participant/whip", text: $videoManager.whipEndpoint)
+                    .textFieldStyle(PlainTextFieldStyle())
+                    .padding(6)
+                    .background(Color(red: 48/255, green: 50/255, blue: 68/255).opacity(0.8))
+                    .cornerRadius(4)
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 10)
+                    .font(.system(size: 12))
+            }
+            
+            // Stream Quality Settings
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Stream Resolution")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                        .frame(width: 100, alignment: .leading)
+                    
+                    Picker("", selection: $videoManager.streamResolution) {
+                        Text("1080p").tag("1080p")
+                        Text("720p").tag("720p")
+                        Text("480p").tag("480p")
+                    }
+                    .pickerStyle(MenuPickerStyle())
+                    .frame(height: 20)
+                }
+                .padding(.horizontal, 10)
+                
+                HStack {
+                    Text("Stream Bitrate")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                        .frame(width: 100, alignment: .leading)
+                    
+                    Picker("", selection: $videoManager.streamBitrate) {
+                        Text("1 Mbps").tag(1000)
+                        Text("2 Mbps").tag(2000)
+                        Text("3 Mbps").tag(3000)
+                        Text("4 Mbps").tag(4000)
+                        Text("5 Mbps").tag(5000)
+                        Text("8 Mbps").tag(8000)
+                        Text("10 Mbps").tag(10000)
+                    }
+                    .pickerStyle(MenuPickerStyle())
+                    .frame(height: 20)
+                }
+                .padding(.horizontal, 10)
+                
+                HStack {
+                    Text("Stream Codec")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                        .frame(width: 100, alignment: .leading)
+                    
+                    Picker("", selection: $videoManager.streamCodec) {
+                        Text("H.264").tag("H264")
+                        Text("VP9").tag("VP9")
+                        Text("VP8").tag("VP8")
+                    }
+                    .pickerStyle(MenuPickerStyle())
+                    .frame(height: 20)
+                }
+                .padding(.horizontal, 10)
+            }
+            
+            // Stream Button
+            Button(action: {
+                if videoPreviewManager.isStreaming {
+                    videoPreviewManager.stopStreaming()
+                } else {
+                    startStreamingWithSettings()
+                }
+            }) {
+                HStack {
+                    Image(systemName: videoPreviewManager.isStreaming ? "stop.circle.fill" : "dot.radiowaves.left.and.right")
+                        .foregroundColor(.white)
+                    
+                    Text(videoPreviewManager.isStreaming ? "Stop Streaming" : "Start Streaming")
+                        .foregroundColor(.white)
+                }
+                .padding(.vertical, 8)
+                .padding(.horizontal, 12)
+                .frame(maxWidth: CGFloat.infinity)
+                .background(videoPreviewManager.isStreaming ? Color.red : Color.blue)
+                .cornerRadius(6)
+            }
+            .buttonStyle(PlainButtonStyle())
+            .padding(.horizontal, 10)
+            .disabled(!videoPreviewManager.permissionsGranted || videoManager.whipEndpoint.isEmpty)
+            .opacity((!videoPreviewManager.permissionsGranted || videoManager.whipEndpoint.isEmpty) ? 0.5 : 1.0)
+            
+            // Streaming Info
+            VStack(alignment: .leading, spacing: 4) {
+                Text("• WHIP: \(videoManager.streamCodec) \(videoManager.streamResolution) \(videoManager.selectedFrameRate)fps \(videoManager.streamBitrate/1000)Mbps")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+                
+                Text("• Compatible with MediaMTX, SRS, and other WHIP servers")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+                
+                if !videoManager.whipEndpoint.isEmpty {
+                    Text("• Endpoint: \(videoManager.whipEndpoint)")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                        .lineLimit(2)
+                }
+            }
+            .padding(.horizontal, 10)
+        }
+        .padding(.bottom, 10)
     }
     
     // Recording Controls
@@ -887,6 +1034,30 @@ struct ContentView: View {
             r2SecretKey: r2SecretKey
         )
     }
+    
+    private func startStreamingWithSettings() {
+        guard !videoManager.whipEndpoint.isEmpty else {
+            print("❌ ContentView: WHIP endpoint is required")
+            return
+        }
+        
+        let streamSettings = StreamSettings(
+            endpoint: videoManager.whipEndpoint,
+            bitrate: videoManager.streamBitrate,
+            frameRate: videoManager.selectedFrameRate,
+            codec: videoManager.streamCodec,
+            resolution: videoManager.streamResolution
+        )
+        
+        Task {
+            do {
+                try await videoPreviewManager.startStreaming(endpoint: videoManager.whipEndpoint, settings: streamSettings)
+                print("✅ ContentView: WHIP streaming started successfully")
+            } catch {
+                print("❌ ContentView: Failed to start WHIP streaming - \(error.localizedDescription)")
+            }
+        }
+    }
 }
 
 struct VideoPreviewView: View {
@@ -978,6 +1149,12 @@ class VideoManager: ObservableObject {
     @Published var r2AccessKey: String = "e12d70affefd4d92da66c362013a6149"
     @Published var r2SecretKey: String = "cf72cea58cc8e1dc37e6723fbb825451d7864d97857dd36c3b643bc3a50b5e24"
     @Published var settingsTab: SettingsTab = .basic
+    
+    // WHIP streaming settings
+    @Published var whipEndpoint: String = ""
+    @Published var streamBitrate: Int = 3000 // kbps 
+    @Published var streamCodec: String = "H264"
+    @Published var streamResolution: String = "1080p"
     
     // Audio monitoring properties
     @Published var isAudioMonitoringEnabled: Bool = false

@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>StreamBar</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    
+    <!-- External Libraries -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lucide-static@0.321.0/font/lucide.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/lucide@0.321.0/dist/umd/lucide.min.js"></script>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="https://cdn.ably.io/lib/ably.min.js"></script>
+    
+    <!-- Local CSS -->
+    <link rel="stylesheet" href="css/main.css">
+    <link rel="stylesheet" href="css/components.css">
+    <link rel="stylesheet" href="css/mobile.css">
+    
+    <!-- Mode Detection Script -->
+    <script>
+        // Detect if this is standalone mode or producer mode
+        const urlParams = new URLSearchParams(window.location.search);
+        const licenseKey = urlParams.get('key');
+        const room = urlParams.get('room');
+        
+        // If license key is provided, redirect to standalone mode
+        if (licenseKey && !room) {
+            window.location.href = `standalone.html?key=${licenseKey}`;
+        }
+        
+        // If neither license key nor room is provided, show error
+        if (!licenseKey && !room) {
+            document.addEventListener('DOMContentLoaded', () => {
+                document.body.innerHTML = `
+                    <div style="display: flex; align-items: center; justify-content: center; min-height: 100vh; text-align: center; font-family: system-ui;">
+                        <div>
+                            <h1>Invalid Access</h1>
+                            <p>Please access this page with either:</p>
+                            <ul style="text-align: left; display: inline-block;">
+                                <li>Producer invite link (with room parameter)</li>
+                                <li>License key (will redirect to standalone mode)</li>
+                            </ul>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+    </script>
+</head>
+<body>
+    <div class="container">
+        <!-- Initial Device Loading Prompt -->
+        <div id="initial-prompt" style="text-align: center; padding: 20px;">
+            <div style="text-align: center; margin: 0 auto 20px auto;">
+                <h1 id="main-title-initial" style="
+                    font-size: 28px;
+                    font-weight: bold;
+                    background: linear-gradient(135deg, #6B46C1, #9333EA, #6B46C1);
+                    -webkit-background-clip: text;
+                    -webkit-text-fill-color: transparent;
+                    background-clip: text;
+                    margin: 0 0 8px 0;
+                    word-wrap: break-word;
+                    max-width: 100%;
+                ">Streamless</h1>
+                <p id="main-subtitle-initial" style="
+                    font-size: 14px;
+                    color: #a9b1d6;
+                    opacity: 0.8;
+                    margin: 0;
+                    word-wrap: break-word;
+                    max-width: 100%;
+                ">Professional Live Streaming</p>
+            </div>
+            <!-- FIXED: Remove onclick, add id for event listener -->
+            <button id="loadDevicesButton" class="primary-button">Load Devices</button>
+            <p style="color: var(--text-color); opacity: 0.8; margin-top: 16px;">Click to allow access to your camera and microphone</p>
+        </div>
+        
+        <!-- Main Content (Hidden Initially) -->
+        <div id="main-content" style="display: none;">
+            
+            <div class="logo-container" style="text-align: center;">
+                <h1 id="main-title" style="
+                    font-size: 28px;
+                    font-weight: bold;
+                    background: linear-gradient(135deg, #6B46C1, #9333EA, #6B46C1);
+                    -webkit-background-clip: text;
+                    -webkit-text-fill-color: transparent;
+                    background-clip: text;
+                    margin: 0 0 8px 0;
+                    word-wrap: break-word;
+                    max-width: 100%;
+                ">Streamless</h1>
+                <p id="main-subtitle" style="
+                    font-size: 14px;
+                    color: #a9b1d6;
+                    opacity: 0.8;
+                    margin: 0 0 20px 0;
+                    word-wrap: break-word;
+                    max-width: 100%;
+                ">Professional Live Streaming</p>
+            </div>
+            
+            <!-- Video Section -->
+            <div class="video-section">
+                <div class="video-container">
+                    <video id="videoPreview" autoplay muted playsinline></video>
+                </div>
+            </div>
+            
+            <!-- Controls Section -->
+            <div class="controls-section">
+                <div class="controls-container">
+                <!-- Device Selection -->
+                <div class="settings-row">
+                    <div class="device-select">
+                        <label for="videoSource">Video Source:</label>
+                        <select id="videoSource"></select>
+                    </div>
+                    
+                    <div class="device-select">
+                        <label for="audioSource">Audio Source:</label>
+                        <select id="audioSource"></select>
+                        <div class="audio-controls">
+                            <!-- FIXED: Remove onclick, add id for event listener -->
+                            <button id="micToggle" class="monitor-toggle active">
+                                <i data-lucide="mic"></i>
+                            </button>
+                            <!-- FIXED: Remove onclick, add id for event listener -->
+                            <button id="monitorToggle" class="monitor-toggle">
+                                <i data-lucide="volume-x"></i>
+                            </button>
+                            <!-- FIXED: Remove oninput, add id for event listener -->
+                            <input type="range" id="monitorVolume" class="volume-slider" 
+                                   min="0" max="100" value="100">
+                            <div id="volumeValue" class="volume-value">100%</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Audio Meter -->
+                <div class="audio-meter">
+                    <div class="stereo-meters">
+                        <div>
+                            <div class="meter-label">
+                                <i data-lucide="activity" style="width: 14px; height: 14px;"></i>
+                                Left
+                            </div>
+                            <div class="meter-container">
+                                <div id="meter-bar-left" class="meter-bar"></div>
+                                <div id="meter-value-left" class="meter-value">-Inf dB</div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="meter-label">
+                                <i data-lucide="activity" style="width: 14px; height: 14px;"></i>
+                                Right
+                            </div>
+                            <div class="meter-container">
+                                <div id="meter-bar-right" class="meter-bar"></div>
+                                <div id="meter-value-right" class="meter-value">-Inf dB</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Streaming Controls -->
+                <div class="button-container">
+                    <!-- FIXED: Remove onclick, add id for event listener -->
+                    <button id="startButton">Start Streaming</button>
+                    <!-- FIXED: Remove onclick, add id for event listener -->
+                    <button id="stopButton" disabled>Stop Streaming</button>
+                </div>
+                
+                <!-- Advanced Settings (Collapsible) -->
+                <details class="settings-group">
+                    <summary style="cursor: pointer; padding: 8px 0;">
+                        <strong>Advanced Settings</strong>
+                    </summary>
+                    
+                    <div style="margin-top: 12px;">
+                        <!-- Video Settings -->
+                        <div class="settings-row">
+                            <div class="device-select">
+                                <label for="videoCodec">Video Codec:</label>
+                                <select id="videoCodec">
+                                    <option value="H264">H.264</option>
+                                    <option value="VP9" selected>VP9</option>
+                                    <option value="VP8">VP8</option>
+                                    <option value="AV1">AV1</option>
+                                </select>
+                            </div>
+                            
+                            <div class="device-select">
+                                <label for="videoBitrate">Bitrate:</label>
+                                <select id="videoBitrate">
+                                    <option value="1000">1 Mbps</option>
+                                    <option value="2500">2.5 Mbps</option>
+                                    <option value="3000" selected>3 Mbps</option>
+                                    <option value="4000">4 Mbps</option>
+                                    <option value="5000">5 Mbps</option>
+                                    <option value="8000">8 Mbps</option>
+                                    <option value="10000">10 Mbps</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="settings-row">
+                            <div class="device-select">
+                                <label for="resolution">Resolution:</label>
+                                <select id="resolution">
+                                    <option value="2160p">4K (2160p)</option>
+                                    <option value="1440p">2K (1440p)</option>
+                                    <option value="1080p" selected>Full HD (1080p)</option>
+                                    <option value="720p">HD (720p)</option>
+                                    <option value="540p">qHD (540p)</option>
+                                    <option value="480p">SD (480p)</option>
+                                    <option value="360p">Low (360p)</option>
+                                </select>
+                            </div>
+                            
+                            <div class="device-select">
+                                <label for="fps">Frame Rate:</label>
+                                <select id="fps">
+                                    <option value="15">15 fps</option>
+                                    <option value="24">24 fps</option>
+                                    <option value="25">25 fps</option>
+                                    <option value="30" selected>30 fps</option>
+                                    <option value="50">50 fps</option>
+                                    <option value="60">60 fps</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <!-- Studio Sound Toggle -->
+                        <div class="studio-sound-toggle">
+                            <label class="toggle-switch">
+                                <!-- FIXED: Remove onchange, add id for event listener -->
+                                <input type="checkbox" id="studioSound">
+                                <span class="toggle-slider"></span>
+                                Studio Sound
+                            </label>
+                            <div class="toggle-description">
+                                Enable high-quality audio without noise suppression
+                            </div>
+                        </div>
+                        
+                        <!-- WHIP Endpoint -->
+                        <div class="device-select" style="margin-top: 12px;">
+                            <label for="whipEndpoint">WHIP Endpoint URL:</label>
+                            <input type="text" id="whipEndpoint" 
+                                   placeholder="https://your-server.com/whip/stream">
+                        </div>
+                    </div>
+                </details>
+                
+                <!-- Status -->
+                <div class="status" id="status"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- JavaScript Modules -->
+    <script type="module" src="js/app.js"></script>
+</body>
+</html>
