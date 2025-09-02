@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Remote Device Controller - StreamBar</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="header">
+        <h1>Remote Device Controller</h1>
+        <p>Control all streamers' devices, audio/video settings, and streaming parameters remotely</p>
+    </div>
+
+    <div class="container">
+        <!-- Connection Section -->
+        <div class="controls-section">
+            <h2 class="section-title">
+                <span>•</span> Connection Settings
+            </h2>
+            <div class="connection-controls">
+                <div class="form-group">
+                    <label for="roomInput">Room Name</label>
+                    <input type="text" id="roomInput" placeholder="Enter room name (e.g., demo1)" />
+                </div>
+                <button class="btn btn-primary" id="connectBtn">
+                    <span id="connectBtnText">Connect</span>
+                </button>
+                <button class="btn btn-secondary" id="discoverBtn" style="display: none;">
+                    Discover Streamers
+                </button>
+                <button class="btn btn-secondary" id="testDeviceSync" style="display: none;">
+                    Test Device Sync
+                </button>
+                <div class="status-indicator status-disconnected" id="connectionStatus">
+                    Disconnected
+                </div>
+            </div>
+        </div>
+
+        <!-- Global Controls Section -->
+        <div class="controls-section" id="globalControlsSection" style="display: none;">
+            <h2 class="section-title">
+                <span>*</span> Global Controls
+            </h2>
+            <div class="global-controls">
+                <button class="bulk-action-btn studio-sound">
+                    Toggle All Studio Sound
+                </button>
+                <button class="bulk-action-btn mute-all">
+                    Mute All Audio
+                </button>
+                <button class="bulk-action-btn mute-all">
+                    Unmute All Audio
+                </button>
+                <button class="bulk-action-btn quality">
+                    Set All High Quality
+                </button>
+                <button class="bulk-action-btn quality">
+                    Set All Low Quality
+                </button>
+            </div>
+        </div>
+
+        <!-- Streamers Section -->
+        <div class="controls-section">
+            <h2 class="section-title">
+                <span>+</span> Connected Streamers
+                <span id="streamerCount" style="font-size: 14px; color: var(--text-secondary);">(0)</span>
+            </h2>
+            
+            <div id="streamersContainer">
+                <div class="empty-state">
+                    <h3>No Streamers Connected</h3>
+                    <p>Connect to a room to see active streamers and control their devices</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Log Section -->
+        <div class="controls-section">
+            <h2 class="section-title">
+                <span>-</span> Activity Log
+            </h2>
+            <div class="log-section" id="logContainer">
+                <div class="log-entry">Ready to connect...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Required Libraries -->
+    <script src="https://cdn.ably.io/lib/ably.min.js"></script>
+    
+    <!-- Application Modules -->
+    <script type="module" src="app.js"></script>
+</body>
+</html>

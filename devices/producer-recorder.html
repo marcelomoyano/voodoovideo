@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Producer Recorder Control - VoodooVideo</title>
+    <link rel="stylesheet" href="recorder-styles.css">
+</head>
+<body>
+    <div class="header">
+        <h1>🎬 Producer Recorder Control</h1>
+        <p>Remote control for recording devices with quality settings, device swapping, and R2 upload monitoring</p>
+    </div>
+
+    <div class="container">
+        <!-- Connection Section -->
+        <div class="controls-section">
+            <h2 class="section-title">
+                <span>📡</span> Room Connection
+            </h2>
+            <div class="connection-controls">
+                <div class="form-group">
+                    <label for="roomInput">Room ID</label>
+                    <input type="text" id="roomInput" placeholder="Enter room ID (e.g., studio-a, demo1)" />
+                </div>
+                <button class="btn btn-primary" id="connectBtn">
+                    <span id="connectBtnText">Connect</span>
+                </button>
+                <button class="btn btn-secondary" id="discoverBtn" style="display: none;">
+                    Discover Recorders
+                </button>
+                <button class="btn btn-secondary" id="refreshBtn" style="display: none;">
+                    Refresh Status
+                </button>
+                <div class="status-indicator status-disconnected" id="connectionStatus">
+                    Disconnected
+                </div>
+            </div>
+        </div>
+
+        <!-- Global Recording Controls Section -->
+        <div class="controls-section" id="globalControlsSection" style="display: none;">
+            <h2 class="section-title">
+                <span>🎙️</span> Global Recording Controls
+            </h2>
+            <div class="global-controls">
+                <button class="bulk-action-btn recording start-all">
+                    ▶️ Start All Recording
+                </button>
+                <button class="bulk-action-btn recording stop-all">
+                    ⏹️ Stop All Recording
+                </button>
+                <button class="bulk-action-btn quality ultra">
+                    🎬 Set All 4K Quality
+                </button>
+                <button class="bulk-action-btn quality high">
+                    🎯 Set All High Quality (1080p)
+                </button>
+                <button class="bulk-action-btn quality medium">
+                    📺 Set All Medium Quality (720p)
+                </button>
+                <button class="bulk-action-btn quality low">
+                    📱 Set All Low Quality (480p)
+                </button>
+            </div>
+        </div>
+
+        <!-- Recorders Section -->
+        <div class="controls-section">
+            <h2 class="section-title">
+                <span>📹</span> Active Recorders
+                <span id="recorderCount" style="font-size: 14px; color: var(--text-secondary);">(0)</span>
+            </h2>
+            
+            <div id="recordersContainer">
+                <div class="empty-state">
+                    <h3>No Recorders Connected</h3>
+                    <p>Connect to a room to see active recording devices and control their settings</p>
+                    <div class="empty-state-icon">🎥</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recording Statistics Section -->
+        <div class="controls-section" id="statsSection" style="display: none;">
+            <h2 class="section-title">
+                <span>📊</span> Recording Statistics
+            </h2>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value" id="totalRecorders">0</div>
+                    <div class="stat-label">Total Recorders</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="activeRecordings">0</div>
+                    <div class="stat-label">Active Recordings</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="totalUploadProgress">0%</div>
+                    <div class="stat-label">Overall Upload Progress</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="averageQuality">-</div>
+                    <div class="stat-label">Average Quality</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Upload Status Section -->
+        <div class="controls-section" id="uploadSection" style="display: none;">
+            <h2 class="section-title">
+                <span>☁️</span> R2 Upload Status
+            </h2>
+            <div id="uploadStatusContainer">
+                <div class="upload-summary">
+                    <div class="upload-progress-bar">
+                        <div class="upload-progress-fill" id="globalUploadProgress" style="width: 0%"></div>
+                    </div>
+                    <div class="upload-text">
+                        <span id="uploadProgressText">No uploads in progress</span>
+                    </div>
+                </div>
+                <div id="uploadDetailsList"></div>
+            </div>
+        </div>
+
+        <!-- Activity Log Section -->
+        <div class="controls-section">
+            <h2 class="section-title">
+                <span>📝</span> Activity Log
+                <button class="btn-small" id="clearLogBtn" style="margin-left: auto;">Clear</button>
+            </h2>
+            <div class="log-section" id="logContainer">
+                <div class="log-entry info">🚀 Producer Recorder Control ready - connect to a room to begin</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div id="confirmModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <h3 id="confirmTitle">Confirm Action</h3>
+            <p id="confirmMessage">Are you sure you want to perform this action?</p>
+            <div class="modal-buttons">
+                <button class="btn btn-secondary" id="confirmCancel">Cancel</button>
+                <button class="btn btn-primary" id="confirmOk">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Required Libraries -->
+    <script src="https://cdn.ably.io/lib/ably.min.js"></script>
+    
+    <!-- Application Modules -->
+    <script type="module" src="recorder-app.js"></script>
+</body>
+</html>
