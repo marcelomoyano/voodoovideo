@@ -5,7 +5,9 @@
 //  Created by Marcelo Moyano on 5/14/25.
 //
 
+#if canImport(Cocoa)
 import Cocoa
+#endif
 import SwiftUI
 
 class AppDelegate: NSObject, NSApplicationDelegate {

@@ -2,13 +2,20 @@ import SwiftUI
 import AVFoundation
 
 struct ContentView: View {
+    @StateObject private var configManager = ConfigurationManager()
     @StateObject private var videoManager = VideoManager()
     @StateObject private var videoPreviewManager = VideoPreviewManager()
-    @StateObject private var ablyManager = AblyManager()
+    @StateObject private var ablyManager: AblyManager
     @State private var isSidebarVisible = true
     @State private var testR2Uploader: R2Uploader?
     @State private var room: String = ""
-    @State private var participantId: String = ""
+    
+    init() {
+        let configManager = ConfigurationManager()
+        let ablyManager = AblyManager(configManager: configManager)
+        _configManager = StateObject(wrappedValue: configManager)
+        _ablyManager = StateObject(wrappedValue: ablyManager)
+    }
     
     var body: some View {
         VStack(spacing: 0) {
@@ -93,13 +100,26 @@ struct ContentView: View {
                         ScrollView {
                             VStack(spacing: 0) {
                                 // Ably Connection Section
-                                Text("Remote Control")
-                                    .font(.headline)
-                                    .frame(maxWidth: CGFloat.infinity, alignment: .leading)
-                                    .padding(.horizontal, 10)
-                                    .padding(.top, 15)
-                                    .padding(.bottom, 5)
-                                    .foregroundColor(.white)
+                                HStack {
+                                    Text("Remote Control")
+                                        .font(.headline)
+                                        .foregroundColor(.white)
+                                    
+                                    Spacer()
+                                    
+                                    // Connection status indicator
+                                    HStack(spacing: 6) {
+                                        Circle()
+                                            .fill(ablyManager.isConnected ? Color.green : Color.red)
+                                            .frame(width: 8, height: 8)
+                                        Text(ablyManager.isConnected ? "Connected" : "Disconnected")
+                                            .font(.caption)
+                                            .foregroundColor(ablyManager.isConnected ? .green : .gray)
+                                    }
+                                }
+                                .padding(.horizontal, 10)
+                                .padding(.top, 15)
+                                .padding(.bottom, 5)
 
                                 ablyConnectionSection
                                 
@@ -198,6 +218,12 @@ struct ContentView: View {
             videoPreviewManager.checkPermissions()
             if videoPreviewManager.permissionsGranted {
                 videoPreviewManager.startPreview()
+            }
+            
+            // Auto-connect to default room if configured
+            if !configManager.defaultRoom.isEmpty && !ablyManager.isConnected {
+                room = configManager.defaultRoom
+                connectToAbly()
             }
         }
     }
@@ -357,6 +383,7 @@ struct ContentView: View {
                     .frame(width: 130, alignment: .leading)
                     .foregroundColor(.white)
                 Picker("", selection: $videoManager.outputResolution) {
+                    Text("4K").tag("4K")
                     Text("1080p").tag("1080p")
                     Text("720p").tag("720p")
                     Text("480p").tag("480p")
@@ -379,6 +406,8 @@ struct ContentView: View {
                     Text("5").tag(5)
                     Text("8").tag(8)
                     Text("10").tag(10)
+                    Text("15").tag(15)
+                    Text("20").tag(20)
                 }
                 .frame(height: 25)
                 .labelsHidden()
@@ -476,7 +505,7 @@ struct ContentView: View {
                     .foregroundColor(.gray)
                     .padding(.horizontal, 10)
                 
-                TextField("R2 Access Key", text: $videoManager.r2AccessKey)
+                TextField("R2 Access Key", text: $configManager.r2AccessKey)
                     .textFieldStyle(PlainTextFieldStyle())
                     .padding(6)
                     .background(Color(red: 48/255, green: 50/255, blue: 68/255).opacity(0.8))
@@ -484,7 +513,7 @@ struct ContentView: View {
                     .foregroundColor(.white)
                     .padding(.horizontal, 10)
                 
-                SecureField("R2 Secret Key", text: $videoManager.r2SecretKey)
+                SecureField("R2 Secret Key", text: $configManager.r2SecretKey)
                     .textFieldStyle(PlainTextFieldStyle())
                     .padding(6)
                     .background(Color(red: 48/255, green: 50/255, blue: 68/255).opacity(0.8))
@@ -494,7 +523,7 @@ struct ContentView: View {
                     .padding(.top, 4)
                 
                 // R2 Upload Status Indicator
-                if !videoManager.r2AccessKey.isEmpty && !videoManager.r2SecretKey.isEmpty {
+                if configManager.hasValidR2Config {
                     HStack {
                         Circle()
                             .fill(Color.green)
@@ -525,7 +554,7 @@ struct ContentView: View {
             .padding(.top, 4)
             
             // Upload Progress Display
-            if videoPreviewManager.isRecording && (!videoManager.r2AccessKey.isEmpty && !videoManager.r2SecretKey.isEmpty) {
+            if videoPreviewManager.isRecording && configManager.hasValidR2Config {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
                         Text("Upload Progress")
@@ -561,15 +590,10 @@ struct ContentView: View {
                         ablyManager.updateStreamStatus("stopped")
                     }
                 } else {
-                    let r2AccessKey = videoManager.r2AccessKey.isEmpty ? nil : videoManager.r2AccessKey
-                    let r2SecretKey = videoManager.r2SecretKey.isEmpty ? nil : videoManager.r2SecretKey
+                    let r2AccessKey = configManager.hasValidR2Config ? configManager.r2AccessKey : nil
+                    let r2SecretKey = configManager.hasValidR2Config ? configManager.r2SecretKey : nil
                     
-                    // Update Ably status when manually starting
-                    if ablyManager.isConnected {
-                        ablyManager.updateStreamStatus("recording")
-                    }
-                    
-                    _ = videoPreviewManager.startRecording(
+                    let success = videoPreviewManager.startRecording(
                         uploadEndpoint: nil,
                         resolution: videoManager.outputResolution,
                         frameRate: videoManager.selectedFrameRate,
@@ -578,6 +602,11 @@ struct ContentView: View {
                         r2AccessKey: r2AccessKey,
                         r2SecretKey: r2SecretKey
                     )
+                    
+                    // Update Ably status when manually starting
+                    if ablyManager.isConnected {
+                        ablyManager.updateStreamStatus(success ? "recording" : "error")
+                    }
                 }
             }) {
                 HStack {
@@ -719,21 +748,18 @@ struct ContentView: View {
     }
     
     private func testR2Upload() {
-        print("🧪 ContentView: Testing R2 upload...")
-        
         // Create test data
         let testData = "Hello from VoodooVideo R2 test!".data(using: .utf8)!
         let tempURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("r2_test.txt")
         
         do {
             try testData.write(to: tempURL)
-            print("✅ R2 Test: Created test file at \(tempURL.path)")
             
-            // Initialize R2 uploader with your credentials and store reference
+            // Initialize R2 uploader with configured credentials
             testR2Uploader = R2Uploader(
-                r2Endpoint: "https://e561d71f6685e1ddd58b290d834f940e.r2.cloudflarestorage.com/vod",
-                accessKeyId: "e12d70affefd4d92da66c362013a6149",
-                secretAccessKey: "cf72cea58cc8e1dc37e6723fbb825451d7864d97857dd36c3b643bc3a50b5e24",
+                r2Endpoint: configManager.r2Endpoint,
+                accessKeyId: configManager.r2AccessKey,
+                secretAccessKey: configManager.r2SecretKey,
                 room: ablyManager.currentRoom ?? "test",
                 participantId: ablyManager.participantId ?? "test-recorder"
             )
@@ -763,18 +789,6 @@ struct ContentView: View {
     // Ably Connection Section
     private var ablyConnectionSection: some View {
         VStack(spacing: 8) {
-            // Connection Status
-            HStack {
-                Circle()
-                    .fill(ablyManager.isConnected ? Color.green : Color.red)
-                    .frame(width: 8, height: 8)
-                
-                Text(ablyManager.connectionStatus)
-                    .font(.caption)
-                    .foregroundColor(.gray)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .padding(.horizontal, 10)
             
             // Room Input
             HStack {
@@ -792,19 +806,19 @@ struct ContentView: View {
             }
             .padding(.horizontal, 10)
             
-            // Participant ID Input
+            // Participant ID Display (auto-generated)
             HStack {
                 Text("ID")
                     .frame(width: 60, alignment: .leading)
                     .foregroundColor(.white)
                 
-                TextField("Enter your ID", text: $participantId)
-                    .textFieldStyle(PlainTextFieldStyle())
+                Text(ablyManager.participantId ?? "Not set")
                     .padding(6)
-                    .background(Color(red: 48/255, green: 50/255, blue: 68/255).opacity(0.8))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color(red: 48/255, green: 50/255, blue: 68/255).opacity(0.5))
                     .cornerRadius(4)
-                    .foregroundColor(.white)
-                    .disabled(ablyManager.isConnected)
+                    .foregroundColor(.gray)
+                    .font(.system(size: 12, design: .monospaced))
             }
             .padding(.horizontal, 10)
             
@@ -812,7 +826,7 @@ struct ContentView: View {
             Button(action: {
                 if ablyManager.isConnected {
                     ablyManager.disconnect()
-                } else if !room.isEmpty && !participantId.isEmpty {
+                } else if !room.isEmpty {
                     connectToAbly()
                 }
             }) {
@@ -826,18 +840,22 @@ struct ContentView: View {
             }
             .buttonStyle(PlainButtonStyle())
             .padding(.horizontal, 10)
-            .disabled(!ablyManager.isConnected && (room.isEmpty || participantId.isEmpty))
-            .opacity((!ablyManager.isConnected && (room.isEmpty || participantId.isEmpty)) ? 0.5 : 1.0)
+            .disabled(!ablyManager.isConnected && room.isEmpty)
+            .opacity((!ablyManager.isConnected && room.isEmpty) ? 0.5 : 1.0)
             
             // Current Room Display
             if ablyManager.isConnected, let currentRoom = ablyManager.currentRoom {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Connected to: \(currentRoom)")
-                        .font(.caption)
-                        .foregroundColor(.green)
-                    Text("as: \(ablyManager.participantId ?? "")")
-                        .font(.caption)
-                        .foregroundColor(.green)
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Room: \(currentRoom)")
+                            .font(.caption)
+                            .foregroundColor(.green)
+                        Text("ID: \(String(ablyManager.participantId?.prefix(8) ?? ""))")
+                            .font(.caption)
+                            .foregroundColor(.green)
+                            .opacity(0.8)
+                    }
+                    Spacer()
                 }
                 .padding(.horizontal, 10)
                 .padding(.top, 4)
@@ -847,32 +865,115 @@ struct ContentView: View {
     }
     
     private func connectToAbly() {
-        ablyManager.connect(to: room, as: participantId)
+        // Store the room for future use
+        configManager.defaultRoom = room
+        ablyManager.connect(to: room, as: ablyManager.participantId ?? configManager.participantId)
         
         // Set up callbacks
         ablyManager.onStartRecording = {
-            if !videoPreviewManager.isRecording {
-                startRecordingWithAbly()
+            DispatchQueue.main.async {
+                if !self.videoPreviewManager.isRecording {
+                    self.startRecordingWithAbly()
+                } else {
+                    // Ensure remote status is synced
+                    self.ablyManager.updateStreamStatus("recording")
+                }
             }
         }
         
         ablyManager.onStopRecording = {
-            if videoPreviewManager.isRecording {
-                videoPreviewManager.stopRecording()
+            DispatchQueue.main.async {
+                if self.videoPreviewManager.isRecording {
+                    self.videoPreviewManager.stopRecording()
+                    self.ablyManager.updateStreamStatus("stopped")
+                } else {
+                    // Ensure remote status is synced
+                    self.ablyManager.updateStreamStatus("ready")
+                }
             }
         }
         
         ablyManager.onForceEndSession = { reason in
-            print("⚠️ Session ended by producer: \(reason)")
-            if videoPreviewManager.isRecording {
-                videoPreviewManager.stopRecording()
+            DispatchQueue.main.async {
+                if self.videoPreviewManager.isRecording {
+                    self.videoPreviewManager.stopRecording()
+                    self.ablyManager.updateStreamStatus("ended")
+                }
             }
+        }
+        
+        // Device swap callbacks
+        ablyManager.onChangeVideoDevice = { deviceId in
+            DispatchQueue.main.async {
+                print("🔄 Changing video device to: \(deviceId)")
+                self.videoManager.selectedVideoDevice = deviceId
+            }
+        }
+        
+        ablyManager.onChangeAudioDevice = { deviceId in
+            DispatchQueue.main.async {
+                print("🔄 Changing audio device to: \(deviceId)")
+                self.videoManager.selectedAudioDevice = deviceId
+            }
+        }
+        
+        // Quality change callbacks
+        ablyManager.onChangeResolution = { resolution in
+            DispatchQueue.main.async {
+                print("🔄 Changing resolution to: \(resolution)")
+                self.videoManager.outputResolution = resolution
+            }
+        }
+        
+        ablyManager.onChangeBitrate = { bitrate in
+            DispatchQueue.main.async {
+                print("🔄 Changing bitrate to: \(bitrate)")
+                self.videoManager.bitrate = bitrate
+            }
+        }
+        
+        ablyManager.onChangeFramerate = { framerate in
+            DispatchQueue.main.async {
+                print("🔄 Changing framerate to: \(framerate)")
+                self.videoManager.selectedFrameRate = framerate
+            }
+        }
+        
+        ablyManager.onChangeDynamicRange = { dynamicRangeString in
+            DispatchQueue.main.async {
+                print("🔄 Changing dynamic range to: \(dynamicRangeString)")
+                switch dynamicRangeString.lowercased() {
+                case "sdr":
+                    self.videoManager.dynamicRange = .sdr
+                case "hlg":
+                    self.videoManager.dynamicRange = .hlg
+                case "pq":
+                    self.videoManager.dynamicRange = .pq
+                default:
+                    print("⚠️ Unknown dynamic range: \(dynamicRangeString)")
+                }
+            }
+        }
+        
+        // Provide current device information callbacks
+        ablyManager.onGetCurrentVideoDevice = {
+            if let device = self.videoManager.currentVideoDevice {
+                return (device.uniqueID, device.localizedName)
+            }
+            return nil
+        }
+        
+        ablyManager.onGetCurrentAudioDevice = {
+            if let device = self.videoManager.currentAudioDevice {
+                return (device.uniqueID, device.localizedName)
+            }
+            return nil
         }
     }
     
     private func startRecordingWithAbly() {
-        let r2AccessKey = videoManager.r2AccessKey.isEmpty ? nil : videoManager.r2AccessKey
-        let r2SecretKey = videoManager.r2SecretKey.isEmpty ? nil : videoManager.r2SecretKey
+        let r2AccessKey = configManager.hasValidR2Config ? configManager.r2AccessKey : nil
+        let r2SecretKey = configManager.hasValidR2Config ? configManager.r2SecretKey : nil
         
         // Update status to "recording" via Ably
         ablyManager.updateStreamStatus("recording")
@@ -975,8 +1076,8 @@ class VideoManager: ObservableObject {
     @Published var outputResolution: String = "1080p"
     @Published var bitrate: Int = 5
     @Published var dynamicRange: DynamicRange = .sdr
-    @Published var r2AccessKey: String = "e12d70affefd4d92da66c362013a6149"
-    @Published var r2SecretKey: String = "cf72cea58cc8e1dc37e6723fbb825451d7864d97857dd36c3b643bc3a50b5e24"
+    @Published var r2AccessKey: String = ""
+    @Published var r2SecretKey: String = ""
     @Published var settingsTab: SettingsTab = .basic
     
     // Audio monitoring properties

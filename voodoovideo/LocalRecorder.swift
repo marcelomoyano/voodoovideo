@@ -1,7 +1,9 @@
 import Foundation
 import AVFoundation
 import VideoToolbox
+#if os(macOS)
 import AppKit
+#endif
 
 class LocalRecorder: NSObject {
     private var assetWriter: AVAssetWriter?
@@ -96,10 +98,11 @@ class LocalRecorder: NSObject {
                             let fileSize = attributes[.size] as? UInt64 ?? 0
                             print("📁 LocalRecorder: File size: \(fileSize) bytes (\(Double(fileSize)/1024/1024) MB)")
                             
-                            // Open Documents folder in Finder to show the file
+                            #if os(macOS)
                             let documentsPath = url.deletingLastPathComponent()
                             NSWorkspace.shared.open(documentsPath)
                             print("📁 LocalRecorder: Opened Documents folder in Finder")
+                            #endif
                         } catch {
                             print("❌ LocalRecorder: Could not get file attributes: \(error)")
                         }

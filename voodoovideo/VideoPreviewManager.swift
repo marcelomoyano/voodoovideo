@@ -560,7 +560,9 @@ class VideoPreviewManager: NSObject, ObservableObject {
         cleanupRecordingState()
         
         // Setup R2 uploader if credentials provided
-        if let accessKey = r2AccessKey, let secretKey = r2SecretKey {
+        if let accessKey = r2AccessKey, let secretKey = r2SecretKey,
+           !accessKey.isEmpty, !secretKey.isEmpty {
+            // Use default R2 endpoint for now - could be configurable later
             let r2Endpoint = "https://e561d71f6685e1ddd58b290d834f940e.r2.cloudflarestorage.com/vod"
             r2Uploader = R2Uploader(
                 r2Endpoint: r2Endpoint,
