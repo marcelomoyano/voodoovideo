@@ -315,18 +315,24 @@ class AblyManager: ObservableObject {
                 if let resolution = data["resolution"] as? String {
                     print("📺 Remote command: Change Resolution to \(resolution)")
                     self?.onChangeResolution?(resolution)
+                    // Send confirmation back
+                    self?.sendResolutionConfirmation(resolution)
                 }
                 
             case "CHANGE_BITRATE":
                 if let bitrate = data["bitrate"] as? Int {
-                    print("📊 Remote command: Change Bitrate to \(bitrate)")
+                    print("📊 Remote command: Change Bitrate to \(bitrate) Mbps")
                     self?.onChangeBitrate?(bitrate)
+                    // Send confirmation back
+                    self?.sendBitrateConfirmation(bitrate)
                 }
                 
             case "CHANGE_FRAMERATE":
                 if let framerate = data["framerate"] as? Int {
-                    print("🎬 Remote command: Change Framerate to \(framerate)")
+                    print("🎬 Remote command: Change Framerate to \(framerate) fps")
                     self?.onChangeFramerate?(framerate)
+                    // Send confirmation back
+                    self?.sendFramerateConfirmation(framerate)
                 }
                 
             case "CHANGE_DYNAMIC_RANGE":
@@ -403,6 +409,60 @@ class AblyManager: ObservableObject {
         ]
         
         channel.publish("recording-progress", data: progressData)
+    }
+    
+    func sendBitrateConfirmation(_ bitrate: Int) {
+        guard let channel = channel, let participantId = participantId else { return }
+        
+        let confirmationData: [String: Any] = [
+            "streamId": participantId,
+            "bitrate": bitrate,
+            "timestamp": Date().timeIntervalSince1970
+        ]
+        
+        channel.publish("bitrate-changed", data: confirmationData) { error in
+            if let error = error {
+                print("❌ Failed to send bitrate confirmation: \(error)")
+            } else {
+                print("✅ Bitrate change confirmed: \(bitrate) Mbps")
+            }
+        }
+    }
+    
+    func sendResolutionConfirmation(_ resolution: String) {
+        guard let channel = channel, let participantId = participantId else { return }
+        
+        let confirmationData: [String: Any] = [
+            "streamId": participantId,
+            "resolution": resolution,
+            "timestamp": Date().timeIntervalSince1970
+        ]
+        
+        channel.publish("resolution-changed", data: confirmationData) { error in
+            if let error = error {
+                print("❌ Failed to send resolution confirmation: \(error)")
+            } else {
+                print("✅ Resolution change confirmed: \(resolution)")
+            }
+        }
+    }
+    
+    func sendFramerateConfirmation(_ framerate: Int) {
+        guard let channel = channel, let participantId = participantId else { return }
+        
+        let confirmationData: [String: Any] = [
+            "streamId": participantId,
+            "framerate": framerate,
+            "timestamp": Date().timeIntervalSince1970
+        ]
+        
+        channel.publish("framerate-changed", data: confirmationData) { error in
+            if let error = error {
+                print("❌ Failed to send framerate confirmation: \(error)")
+            } else {
+                print("✅ Framerate change confirmed: \(framerate) fps")
+            }
+        }
     }
     
     func disconnect() {
